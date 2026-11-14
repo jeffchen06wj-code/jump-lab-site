@@ -1,0 +1,3385 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#124d3a" />
+  <title>JumpLab（JL）｜智慧跳躍影像分析 v3</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <!-- MediaPipe Pose (Legacy + Tasks Vision ESM loader for reliable browser AI detection) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script type="module">
+    import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+    window.MPTasksVision = { PoseLandmarker, FilesetResolver };
+    if (window.initTasksVisionLandmarker) {
+      window.initTasksVisionLandmarker();
+    }
+  </script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans TC', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            jl: {
+              dark: '#0b3326',
+              primary: '#124d3a',
+              mid: '#1b6b51',
+              light: '#e8f3ef',
+              accent: '#10b981',
+              cyan: '#06b6d4',
+              amber: '#f59e0b'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
+      background-color: #f3f6f5;
+      color: #0f172a;
+    }
+    /* Custom thin scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #e2e8f0;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #94a3b8;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b;
+    }
+    /* Custom range slider */
+    input[type="range"].jl-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"].jl-slider::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 9999px;
+      background: #cbd5e1;
+    }
+    input[type="range"].jl-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #124d3a;
+      border: 2px solid #ffffff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+      margin-top: -5px;
+      transition: transform 0.12s ease;
+    }
+    input[type="range"].jl-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.18);
+    }
+    .canvas-container {
+      aspect-ratio: 4 / 3;
+      background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
+    }
+    .video-stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .video-stage video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .video-stage canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    @media (max-width: 640px) {
+      body { font-size: 14px; overflow-x: hidden; }
+      header { position: relative !important; }
+      header > div { padding: 0.75rem 0.75rem; align-items: flex-start; }
+      header .no-print { width: 100%; gap: 0.4rem; }
+      header .no-print > .flex.bg-black\/25 { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      header .no-print > .flex.bg-black\/25 button { padding-left: 0.35rem; padding-right: 0.35rem; white-space: nowrap; }
+      header .no-print > button, header .no-print > .relative { flex: 1 1 calc(50% - 0.4rem); }
+      header .no-print > button { justify-content: center; }
+      main { padding: 0.6rem; }
+      main > section { border-radius: 0.9rem; }
+      #globalSyncBar { align-items: stretch; }
+      #globalSyncBar > div { width: 100%; }
+      #globalSyncBar .speed-btn { padding-left: 0.35rem; padding-right: 0.35rem; }
+      #webcamSection .relative.bg-slate-950 { min-height: 58vh; max-height: 72vh; }
+      #webcamCanvas { width: 100%; height: 100%; max-width: none; aspect-ratio: 9 / 16; object-fit: contain; }
+      #comparisonWorkspace { display: flex; flex-direction: column; }
+      #card-A, #card-B { width: 100%; }
+      .canvas-container { aspect-ratio: 4 / 3; }
+      #hud-A, #hud-B { transform: scale(0.88); transform-origin: top left; max-width: calc(100% - 1rem); }
+      #metricsTableBody td, #metricsTableBody th { white-space: nowrap; }
+      #eventCardsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #webcamReportSection .grid { gap: 0.5rem; }
+      #webcamReportSection table, #testHistoryBody { font-size: 0.68rem; }
+      #webcamReportSection table th, #webcamReportSection table td { padding-left: 0.45rem; padding-right: 0.45rem; white-space: nowrap; }
+      #testHistoryBody td, #testHistoryBody th { white-space: nowrap; }
+      #kinematicChart { min-height: 220px; }
+      .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+      .text-xl { font-size: 1.05rem; }
+    }
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+      body {
+        background: #ffffff !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-[#124d3a] selection:text-white">
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="bg-gradient-to-r from-[#0b3326] via-[#124d3a] to-[#175e47] text-white shadow-lg sticky top-0 z-40">
+    <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <!-- Brand Identity -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm border border-white/25 flex items-center justify-center shadow-inner">
+          <svg class="w-6 h-6 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="12" cy="4.5" r="2" fill="currentColor"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 9.5l5 2 5-2M12 11.5v4.5m0 0l-3.5 4.5M12 16l3.5 4.5"/>
+            <path stroke-linecap="round" stroke-dasharray="2 2" d="M4 21h16" opacity="0.6"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight">JumpLab（JL）</h1>
+            <span class="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 rounded-full">v3.0 Pro</span>
+          </div>
+          <p class="text-xs text-emerald-100/80 hidden sm:block">AI 骨架辨識與雙影片 <span id="headerProtocolLabel">CMJ</span> 跳躍生物力學比較系統</p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher & Engine Status -->
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3 no-print">
+        <div id="aiEngineBadge" class="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/25 border border-white/15 text-xs font-medium text-emerald-200">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>AI 姿態引擎就緒</span>
+        </div>
+
+        <!-- View Mode Tabs -->
+        <div class="flex bg-black/25 p-1 rounded-xl border border-white/15">
+          <button onclick="setAppMode('dual')" id="modeBtn-dual" class="mode-tab px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#124d3a] shadow transition">
+            雙影片比較
+          </button>
+          <button onclick="setAppMode('single')" id="modeBtn-single" class="mode-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition">
+            單影片精細分析
+          </button>
+          <button onclick="setAppMode('webcam')" id="modeBtn-webcam" class="mode-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-rose-400"></span>即時攝影機
+          </button>
+        </div>
+
+        <!-- Quick Demo & Export Actions -->
+        <button onclick="loadDemoPair()" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow transition flex items-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          載入範例比較組
+        </button>
+
+        <div class="relative inline-block">
+          <button onclick="toggleExportMenu()" class="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-white font-semibold text-xs transition flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            匯出報告
+          </button>
+          <div id="exportDropdown" class="hidden absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 text-slate-700 z-50 text-xs">
+            <button onclick="exportReportHTML()" class="w-full text-left px-4 py-2 hover:bg-slate-100 font-medium flex items-center gap-2">
+              <span class="text-rose-700 font-bold">HTML</span> 下載完整報告檔
+            </button>
+            <button onclick="shareReportFile()" class="w-full text-left px-4 py-2 hover:bg-slate-100 font-medium flex items-center gap-2">
+              <span class="text-violet-700 font-bold">分享</span> 傳送至 LINE 等 App
+            </button>
+            <button onclick="exportReportCSV()" class="w-full text-left px-4 py-2 hover:bg-slate-100 font-medium flex items-center gap-2">
+              <span class="text-emerald-700 font-bold">CSV</span> 匯出數據與角度表格
+            </button>
+            <button onclick="exportReportJSON()" class="w-full text-left px-4 py-2 hover:bg-slate-100 font-medium flex items-center gap-2">
+              <span class="text-cyan-700 font-bold">JSON</span> 匯出完整骨架軌跡
+            </button>
+            <button onclick="window.print()" class="w-full text-left px-4 py-2 hover:bg-slate-100 font-medium flex items-center gap-2 border-t border-slate-100">
+              <span class="text-slate-700 font-bold">PDF</span> 列印 / 儲存報告
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-5 py-4 space-y-4">
+
+    <!-- Skeleton Overlay Toggles & Global Sync Control Bar -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-4 space-y-3 no-print">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+        <!-- Overlay Layer Toggles -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1 flex items-center gap-1">
+            <svg class="w-4 h-4 text-[#124d3a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            骨架與角度圖層：
+          </span>
+          <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-100 select-none">
+            <input type="checkbox" id="layerSkeleton" checked onchange="redrawAll()" class="accent-[#124d3a] rounded">
+            <span class="w-2 h-2 rounded-full bg-cyan-500"></span>全身骨架連線
+          </label>
+          <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-100 select-none">
+            <input type="checkbox" id="layerAngles" checked onchange="redrawAll()" class="accent-[#124d3a] rounded">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>關節弧形角度標註
+          </label>
+          <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-100 select-none">
+            <input type="checkbox" id="layerCOM" checked onchange="redrawAll()" class="accent-[#124d3a] rounded">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>質心(COM)軌跡
+          </label>
+          <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-100 select-none">
+            <input type="checkbox" id="layerGround" checked onchange="redrawAll()" class="accent-[#124d3a] rounded">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>地面基準標尺
+          </label>
+          <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-100 select-none">
+            <input type="checkbox" id="layerValgus" onchange="redrawAll()" class="accent-[#124d3a] rounded">
+            <span class="w-2 h-2 rounded-full bg-purple-500"></span>膝外翻垂直基準線
+          </label>
+        </div>
+
+        <!-- Jump Type & Calibration Info -->
+        <div class="flex items-center gap-2 text-xs">
+          <span class="font-semibold text-slate-500">動作類型：</span>
+          <select id="jumpProtocolSelect" onchange="recalculateAllMetrics()" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 font-bold text-[#124d3a] focus:outline-none focus:ring-2 focus:ring-[#124d3a]">
+            <option value="CMJ">CMJ 反向跳 (Countermovement Jump)</option>
+            <option value="SJ">SJ 蹲跳 (Squat Jump)</option>
+            <option value="DJ">DJ 著地反彈跳 (Drop Jump)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Granular Joint Angle & Side Filter Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50/90 px-3 py-2 rounded-xl border border-slate-200/80 text-xs">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-bold text-slate-600">顯示關節角度項目：</span>
+          <label class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-slate-200 cursor-pointer select-none font-semibold text-amber-700">
+            <input type="checkbox" id="angFilterKnee" checked onchange="redrawAll()" class="accent-amber-600">
+            膝關節 Knee
+          </label>
+          <label class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-slate-200 cursor-pointer select-none font-semibold text-cyan-700">
+            <input type="checkbox" id="angFilterHip" checked onchange="redrawAll()" class="accent-cyan-600">
+            髖關節 Hip
+          </label>
+          <label class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-slate-200 cursor-pointer select-none font-semibold text-purple-700">
+            <input type="checkbox" id="angFilterAnkle" checked onchange="redrawAll()" class="accent-purple-600">
+            踝關節 Ankle
+          </label>
+          <label class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-slate-200 cursor-pointer select-none font-semibold text-emerald-700">
+            <input type="checkbox" id="angFilterTrunk" checked onchange="redrawAll()" class="accent-emerald-600">
+            軀幹前傾 Trunk Lean
+          </label>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <span class="font-bold text-slate-600">標註側別：</span>
+          <div class="inline-flex rounded-lg bg-white border border-slate-300 p-0.5">
+            <button onclick="setAngleSideMode('auto')" id="sideBtn-auto" class="side-btn px-2 py-0.5 rounded-md font-bold bg-[#124d3a] text-white transition">自動鏡頭側</button>
+            <button onclick="setAngleSideMode('right')" id="sideBtn-right" class="side-btn px-2 py-0.5 rounded-md font-semibold text-slate-600 hover:bg-slate-100 transition">右側 (R)</button>
+            <button onclick="setAngleSideMode('left')" id="sideBtn-left" class="side-btn px-2 py-0.5 rounded-md font-semibold text-slate-600 hover:bg-slate-100 transition">左側 (L)</button>
+            <button onclick="setAngleSideMode('both')" id="sideBtn-both" class="side-btn px-2 py-0.5 rounded-md font-semibold text-slate-600 hover:bg-slate-100 transition">雙側 (L+R)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Global Sync Controls (Shown in Dual Mode) -->
+      <div id="globalSyncBar" class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="toggleSyncPlay()" id="syncPlayBtn" class="px-4 py-2 rounded-xl bg-[#124d3a] hover:bg-[#1b6b51] text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5">
+            <svg id="syncPlayIcon" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <span id="syncPlayText">雙影片同步播放</span>
+          </button>
+
+          <div class="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
+            <button onclick="stepBothFrames(-1)" class="px-2.5 py-1 rounded-lg hover:bg-white text-xs font-bold text-slate-700 transition" title="同步後退 1 幀">-1F</button>
+            <button onclick="stepBothFrames(1)" class="px-2.5 py-1 rounded-lg hover:bg-white text-xs font-bold text-slate-700 transition" title="同步前進 1 幀">+1F</button>
+          </div>
+
+          <!-- Playback Speed -->
+          <div class="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200 gap-0.5">
+            <span class="text-[11px] font-bold text-slate-500 px-2">速度:</span>
+            <button onclick="setGlobalSpeed(0.1)" class="speed-btn px-2 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white">0.1x</button>
+            <button onclick="setGlobalSpeed(0.25)" class="speed-btn px-2 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white">0.25x</button>
+            <button onclick="setGlobalSpeed(0.5)" class="speed-btn px-2 py-1 rounded-lg text-xs font-bold bg-white text-[#124d3a] shadow-sm">0.5x</button>
+            <button onclick="setGlobalSpeed(1.0)" class="speed-btn px-2 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white">1.0x</button>
+          </div>
+        </div>
+
+        <!-- Key Event Instant Alignment Buttons -->
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-xs font-bold text-slate-500 mr-1">關鍵事件瞬間對齊：</span>
+          <button onclick="alignByEvent('lowestPoint')" class="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold transition">
+            對齊最低下蹲點
+          </button>
+          <button onclick="alignByEvent('takeoff')" class="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition">
+            對齊起跳瞬間
+          </button>
+          <button onclick="alignByEvent('landing')" class="px-2.5 py-1.5 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border border-cyan-200 text-xs font-bold transition">
+            對齊落地瞬間
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Webcam Live Mode Section (Hidden by default) -->
+    <section id="webcamSection" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-4 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+          <span class="w-3 h-3 rounded-full bg-rose-500 animate-ping"></span>
+          <h2 class="font-bold text-sm sm:text-base">即時攝影機 AI 跳躍骨架偵測</h2>
+          <span class="text-xs text-slate-400">請將全身納入畫面側面或正面進行垂直跳躍</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="startWebcam()" id="btnStartCam" class="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition">啟動攝影機</button>
+          <button onclick="stopWebcam()" id="btnStopCam" class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition hidden">停止攝影機</button>
+        </div>
+      </div>
+      <div class="relative bg-slate-950 flex items-center justify-center max-h-[540px] overflow-hidden">
+        <video id="webcamVideo" class="hidden" playsinline muted></video>
+        <canvas id="webcamCanvas" class="w-full max-w-4xl aspect-video object-contain"></canvas>
+        <div id="webcamPlaceholder" class="py-20 text-center text-slate-400 space-y-2">
+          <p class="text-sm font-semibold">點擊上方「啟動攝影機」以進行即時骨架角度追蹤</p>
+          <p class="text-xs text-slate-500">支援本機瀏覽器即時演算，影像不會上傳至任何外部伺服器</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Jump Report -->
+    <section id="webcamReportSection" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-6 rounded-full bg-rose-500"></span>
+          <h2 class="font-extrabold text-sm sm:text-base text-slate-800">即時跳躍報告</h2>
+          <span id="webcamReportProtocol" class="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold">CMJ</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="webcamJumpCount" class="text-xs font-semibold text-slate-500">已記錄 0 次</span>
+          <button onclick="clearWebcamJumpHistory()" class="px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-bold text-slate-700">清除紀錄</button>
+        </div>
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="rounded-xl bg-rose-50 border border-rose-100 p-3"><div class="text-[11px] text-rose-700 font-bold">本次跳躍高度</div><div id="liveJumpHeight" class="mt-1 text-xl font-extrabold text-rose-900">--</div></div>
+          <div class="rounded-xl bg-cyan-50 border border-cyan-100 p-3"><div class="text-[11px] text-cyan-700 font-bold">騰空時間</div><div id="liveFlightTime" class="mt-1 text-xl font-extrabold text-cyan-900">--</div></div>
+          <div class="rounded-xl bg-amber-50 border border-amber-100 p-3"><div class="text-[11px] text-amber-700 font-bold">最高點相對高度</div><div id="livePeakHeight" class="mt-1 text-xl font-extrabold text-amber-900">--</div></div>
+          <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3"><div class="text-[11px] text-emerald-700 font-bold">當前階段</div><div id="liveJumpPhase" class="mt-1 text-base font-extrabold text-emerald-900">等待起跳</div></div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div class="text-[11px] font-bold text-slate-600 mb-2">本次事件時間線</div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+            <div><span class="text-slate-500">起跳離地</span><strong id="liveEventTakeoff" class="block font-mono text-slate-800">--</strong></div>
+            <div><span class="text-slate-500">騰空最高點</span><strong id="liveEventPeak" class="block font-mono text-slate-800">--</strong></div>
+            <div><span class="text-slate-500">首次觸地</span><strong id="liveEventContact" class="block font-mono text-slate-800">--</strong></div>
+            <div><span class="text-slate-500">緩衝最低點</span><strong id="liveEventBuffer" class="block font-mono text-slate-800">--</strong></div>
+          </div>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-slate-100 text-slate-600"><tr><th class="px-3 py-2">次數</th><th class="px-3 py-2">時間</th><th class="px-3 py-2 text-right">跳高</th><th class="px-3 py-2 text-right">騰空</th><th class="px-3 py-2 text-right">最高點上升</th><th class="px-3 py-2 text-right">觸地</th><th class="px-3 py-2 text-right">緩衝最低</th></tr></thead>
+            <tbody id="webcamJumpHistoryBody"><tr><td colspan="7" class="px-3 py-4 text-center text-slate-400">啟動攝影機並完成一次跳躍後，這裡會顯示紀錄</td></tr></tbody>
+          </table>
+        </div>
+        <p class="text-[11px] text-slate-500">提示：即時報告以影像中的踝部離地與回到基準高度估算；請保持全身入鏡，數據適合快速回饋，不取代測力板或光柵的正式測量。</p>
+      </div>
+    </section>
+
+    <!-- Dual / Single Video Comparison Grid -->
+    <section id="comparisonWorkspace" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+      <!-- VIDEO SLOT A (Baseline / Pre-Test) -->
+      <div id="card-A" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <!-- Card Header -->
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-[#124d3a] text-white font-extrabold text-xs flex items-center justify-center shadow-sm">A</span>
+            <div>
+              <input id="label-A" type="text" value="影片 A｜基準前測 (Baseline)" class="font-bold text-sm text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#124d3a] focus:outline-none px-1" />
+              <div id="status-A" class="text-[11px] text-slate-500 px-1">內建範例：一般反向跳 (JH: 31.4 cm)</div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5 no-print">
+            <label class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-xs font-semibold text-slate-700 cursor-pointer transition flex items-center gap-1">
+              <svg class="w-3.5 h-3.5 text-[#124d3a]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              上傳影片
+              <input type="file" accept="video/*" class="hidden" onchange="handleVideoUpload(event, 'A')">
+            </label>
+            <button id="batchBtn-A" onclick="batchAnalyzeVideo('A')" class="hidden px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-sm flex items-center gap-1" title="全片自動逐幀掃描建立快取與角度曲線">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+              全片骨架掃描
+            </button>
+            <button onclick="loadDemoIntoSlot('A', 'baseline')" class="px-2.5 py-1 rounded-lg bg-[#e8f3ef] hover:bg-[#d3ebe3] text-[#124d3a] text-xs font-bold transition">
+              範例動作
+            </button>
+          </div>
+        </div>
+
+        <!-- Canvas & Video Viewport -->
+        <div id="dropzone-A" class="relative canvas-container w-full overflow-hidden select-none group">
+          <div class="video-stage">
+            <video id="video-A" class="hidden" playsinline muted preload="auto" crossorigin="anonymous"></video>
+            <canvas id="canvas-A" class="z-10"></canvas>
+          </div>
+
+          <!-- Live Joint Angle HUD Overlay (Top Left) -->
+          <div id="hud-A" class="absolute top-3 left-3 bg-slate-950/75 backdrop-blur-md border border-white/15 rounded-xl p-2.5 text-white text-[11px] space-y-1 pointer-events-none z-20">
+            <div class="font-bold text-emerald-300 flex items-center justify-between gap-4 border-b border-white/10 pb-1">
+              <span>即時運動學參數</span>
+              <span id="hudMode-A" class="text-[10px] px-1.5 py-0.2 bg-cyan-500/20 text-cyan-300 rounded">模擬引擎</span>
+            </div>
+            <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono">
+              <span class="text-slate-400">膝關節 Knee:</span><span id="hudKnee-A" class="text-right font-bold text-amber-300">174°</span>
+              <span class="text-slate-400">髖關節 Hip:</span><span id="hudHip-A" class="text-right font-bold text-cyan-300">172°</span>
+              <span class="text-slate-400">踝關節 Ankle:</span><span id="hudAnkle-A" class="text-right font-bold text-purple-300">112°</span>
+              <span class="text-slate-400">軀幹前傾 Lean:</span><span id="hudTrunk-A" class="text-right font-bold text-emerald-300">6°</span>
+              <span class="text-slate-400">質心高度 ΔY:</span><span id="hudHeight-A" class="text-right font-bold text-white">0.0 cm</span>
+            </div>
+          </div>
+
+          <!-- Processing Progress Overlay -->
+          <div id="procOverlay-A" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center z-30">
+            <div class="w-10 h-10 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p class="font-bold text-sm">正在執行全片 AI 逐幀人體骨架掃描...</p>
+            <p id="procText-A" class="text-xs text-slate-300 mt-1">分析進度：0%</p>
+            <div class="w-56 h-2 bg-slate-800 rounded-full overflow-hidden mt-3">
+              <div id="procBar-A" class="h-full bg-emerald-400 transition-all duration-150" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline Scrubber & Phase Bar -->
+        <div class="p-3 bg-slate-50 border-t border-slate-200 space-y-2 no-print">
+          <!-- Phase Indicator Pill Bar -->
+          <div class="flex items-center justify-between text-[11px] font-bold">
+            <span id="phaseBadge-A" class="px-2.5 py-0.5 rounded-full bg-[#124d3a] text-white">準備站立期</span>
+            <span id="timeDisplay-A" class="font-mono text-slate-600">0.000s (F0)</span>
+          </div>
+
+          <!-- Visual Phase Segmented Timeline -->
+          <div class="relative w-full">
+            <div id="phaseBar-A" class="h-2 w-full rounded-full overflow-hidden flex bg-slate-200 mb-1.5"></div>
+            <input id="scrubber-A" type="range" min="0" max="100" value="0" oninput="seekSlot('A', this.value)" class="jl-slider w-full">
+          </div>
+
+          <!-- Individual Playback & Calibration Controls -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div class="flex items-center gap-1">
+              <button onclick="togglePlaySlot('A')" id="playBtn-A" class="px-3 py-1 rounded-lg bg-[#124d3a] hover:bg-[#1b6b51] text-white text-xs font-bold transition">播放</button>
+              <button onclick="stepFrameSlot('A', -1)" class="px-2 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-bold text-slate-700">-1F</button>
+              <button onclick="stepFrameSlot('A', 1)" class="px-2 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-bold text-slate-700">+1F</button>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-600">
+              <label class="flex items-center gap-1" title="影片拍攝幀率 (FPS)">
+                <span>FPS:</span>
+                <select id="fps-A" onchange="updateSlotCalibration('A')" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold text-slate-800">
+                  <option value="30">30</option>
+                  <option value="60" selected>60</option>
+                  <option value="120">120</option>
+                  <option value="240">240</option>
+                </select>
+              </label>
+              <label class="flex items-center gap-1" title="受試者身高用於空間尺度校準">
+                <span>身高:</span>
+                <input id="height-A" type="number" value="175" min="120" max="220" onchange="updateSlotCalibration('A')" class="w-12 bg-white border border-slate-300 rounded px-1 py-0.5 font-bold text-slate-800 text-center">
+                <span>cm</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIDEO SLOT B (Post-Test / Intervention) -->
+      <div id="card-B" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <!-- Card Header -->
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-lg bg-cyan-600 text-white font-extrabold text-xs flex items-center justify-center shadow-sm">B</span>
+            <div>
+              <input id="label-B" type="text" value="影片 B｜訓練後測 (Post-Test)" class="font-bold text-sm text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-cyan-600 focus:outline-none px-1" />
+              <div id="status-B" class="text-[11px] text-slate-500 px-1">內建範例：優化發力反向跳 (JH: 38.6 cm)</div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5 no-print">
+            <label class="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-xs font-semibold text-slate-700 cursor-pointer transition flex items-center gap-1">
+              <svg class="w-3.5 h-3.5 text-cyan-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              上傳影片
+              <input type="file" accept="video/*" class="hidden" onchange="handleVideoUpload(event, 'B')">
+            </label>
+            <button id="batchBtn-B" onclick="batchAnalyzeVideo('B')" class="hidden px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-sm flex items-center gap-1" title="全片自動逐幀掃描建立快取與角度曲線">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+              全片骨架掃描
+            </button>
+            <button onclick="loadDemoIntoSlot('B', 'improved')" class="px-2.5 py-1 rounded-lg bg-cyan-50 hover:bg-cyan-100 text-cyan-800 text-xs font-bold transition">
+              範例動作
+            </button>
+          </div>
+        </div>
+
+        <!-- Canvas & Video Viewport -->
+        <div id="dropzone-B" class="relative canvas-container w-full overflow-hidden select-none group">
+          <div class="video-stage">
+            <video id="video-B" class="hidden" playsinline muted preload="auto" crossorigin="anonymous"></video>
+            <canvas id="canvas-B" class="z-10"></canvas>
+          </div>
+
+          <!-- Live Joint Angle HUD Overlay -->
+          <div id="hud-B" class="absolute top-3 left-3 bg-slate-950/75 backdrop-blur-md border border-white/15 rounded-xl p-2.5 text-white text-[11px] space-y-1 pointer-events-none z-20">
+            <div class="font-bold text-cyan-300 flex items-center justify-between gap-4 border-b border-white/10 pb-1">
+              <span>即時運動學參數</span>
+              <span id="hudMode-B" class="text-[10px] px-1.5 py-0.2 bg-cyan-500/20 text-cyan-300 rounded">模擬引擎</span>
+            </div>
+            <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono">
+              <span class="text-slate-400">膝關節 Knee:</span><span id="hudKnee-B" class="text-right font-bold text-amber-300">175°</span>
+              <span class="text-slate-400">髖關節 Hip:</span><span id="hudHip-B" class="text-right font-bold text-cyan-300">174°</span>
+              <span class="text-slate-400">踝關節 Ankle:</span><span id="hudAnkle-B" class="text-right font-bold text-purple-300">114°</span>
+              <span class="text-slate-400">軀幹前傾 Lean:</span><span id="hudTrunk-B" class="text-right font-bold text-emerald-300">4°</span>
+              <span class="text-slate-400">質心高度 ΔY:</span><span id="hudHeight-B" class="text-right font-bold text-white">0.0 cm</span>
+            </div>
+          </div>
+
+          <!-- Processing Progress Overlay -->
+          <div id="procOverlay-B" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center z-30">
+            <div class="w-10 h-10 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p class="font-bold text-sm">正在執行全片 AI 逐幀人體骨架掃描...</p>
+            <p id="procText-B" class="text-xs text-slate-300 mt-1">分析進度：0%</p>
+            <div class="w-56 h-2 bg-slate-800 rounded-full overflow-hidden mt-3">
+              <div id="procBar-B" class="h-full bg-cyan-400 transition-all duration-150" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline Scrubber & Phase Bar -->
+        <div class="p-3 bg-slate-50 border-t border-slate-200 space-y-2 no-print">
+          <div class="flex items-center justify-between text-[11px] font-bold">
+            <span id="phaseBadge-B" class="px-2.5 py-0.5 rounded-full bg-cyan-600 text-white">準備站立期</span>
+            <span id="timeDisplay-B" class="font-mono text-slate-600">0.000s (F0)</span>
+          </div>
+
+          <div class="relative w-full">
+            <div id="phaseBar-B" class="h-2 w-full rounded-full overflow-hidden flex bg-slate-200 mb-1.5"></div>
+            <input id="scrubber-B" type="range" min="0" max="100" value="0" oninput="seekSlot('B', this.value)" class="jl-slider w-full">
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div class="flex items-center gap-1">
+              <button onclick="togglePlaySlot('B')" id="playBtn-B" class="px-3 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition">播放</button>
+              <button onclick="stepFrameSlot('B', -1)" class="px-2 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-bold text-slate-700">-1F</button>
+              <button onclick="stepFrameSlot('B', 1)" class="px-2 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-bold text-slate-700">+1F</button>
+            </div>
+
+            <div class="flex items-center gap-2 text-[11px] text-slate-600">
+              <label class="flex items-center gap-1">
+                <span>FPS:</span>
+                <select id="fps-B" onchange="updateSlotCalibration('B')" class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold text-slate-800">
+                  <option value="30">30</option>
+                  <option value="60" selected>60</option>
+                  <option value="120">120</option>
+                  <option value="240">240</option>
+                </select>
+              </label>
+              <label class="flex items-center gap-1">
+                <span>身高:</span>
+                <input id="height-B" type="number" value="175" min="120" max="220" onchange="updateSlotCalibration('B')" class="w-12 bg-white border border-slate-300 rounded px-1 py-0.5 font-bold text-slate-800 text-center">
+                <span>cm</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Biomechanical KPI Comparison Matrix & Kinematic Curves -->
+    <section class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+
+      <!-- Left 7 Cols: Biomechanical Metrics Comparison Table -->
+      <div class="xl:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-6 rounded-full bg-[#124d3a]"></span>
+            <h2 class="font-extrabold text-sm sm:text-base text-slate-800"><span id="metricsProtocolLabel">CMJ</span> 核心生物力學指標對照表</h2>
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500">依據騰空時間法 (FT) 與質心位移推算</span>
+        </div>
+
+        <div class="overflow-x-auto flex-1">
+          <table class="w-full text-left border-collapse text-xs sm:text-sm">
+            <thead>
+              <tr class="bg-slate-100/80 text-slate-600 border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                <th class="py-2.5 px-4 font-bold">生物力學指標 (Metric)</th>
+                <th class="py-2.5 px-3 font-bold text-right text-[#124d3a]">影片 A (基準)</th>
+                <th class="py-2.5 px-3 font-bold text-right text-cyan-700">影片 B (比較)</th>
+                <th class="py-2.5 px-4 font-bold text-right">差異變化 (Δ / %)</th>
+              </tr>
+            </thead>
+            <tbody id="metricsTableBody" class="divide-y divide-slate-100">
+              <!-- Populated dynamically by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- AI Coaching Insights Footer -->
+        <div id="coachingInsightBox" class="p-3.5 bg-[#e8f3ef]/70 border-t border-[#124d3a]/15 text-xs text-slate-700 space-y-1">
+          <div class="font-bold text-[#124d3a] flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            JumpLab AI 動作品質診斷建議：
+          </div>
+          <p id="coachingInsightText" class="leading-relaxed text-slate-700">正在分析雙影片運動學軌跡...</p>
+        </div>
+      </div>
+
+      <!-- Right 5 Cols: Interactive Kinematic Curves (Displacement & Joint Angles) -->
+      <div class="xl:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-6 rounded-full bg-cyan-600"></span>
+            <h2 class="font-extrabold text-sm sm:text-base text-slate-800">運動學時間序列曲線</h2>
+          </div>
+
+          <!-- Curve Metric Selector -->
+          <div class="flex bg-slate-200/70 p-0.5 rounded-lg text-[11px] font-bold">
+            <button onclick="setChartMetric('comY')" id="chartTab-comY" class="chart-tab px-2.5 py-1 rounded-md bg-white text-[#124d3a] shadow-sm">質心高度</button>
+            <button onclick="setChartMetric('velY')" id="chartTab-velY" class="chart-tab px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900">垂直速度</button>
+            <button onclick="setChartMetric('kneeAngle')" id="chartTab-kneeAngle" class="chart-tab px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900">膝關節角</button>
+            <button onclick="setChartMetric('hipAngle')" id="chartTab-hipAngle" class="chart-tab px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900">髖關節角</button>
+          </div>
+        </div>
+
+        <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
+          <div class="relative w-full h-64 sm:h-72 bg-slate-50 rounded-xl border border-slate-200/80 p-2">
+            <canvas id="kinematicChart" class="w-full h-full cursor-crosshair"></canvas>
+          </div>
+
+          <!-- Legend & Interactive Tip -->
+          <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+            <div class="flex items-center gap-4">
+              <span class="flex items-center gap-1.5 font-bold text-[#124d3a]">
+                <span class="w-3 h-1 rounded bg-[#124d3a]"></span> 影片 A 軌跡
+              </span>
+              <span class="flex items-center gap-1.5 font-bold text-cyan-600">
+                <span class="w-3 h-1 rounded bg-cyan-600"></span> 影片 B 軌跡
+              </span>
+            </div>
+            <span>點擊曲線任意時間點可跳轉影片畫面</span>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Jump Phase Breakdown Strip (5 Key Events) -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h3 class="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+          <span class="w-2.5 h-5 rounded-full bg-amber-500"></span>
+          自動跳躍分期與關鍵事件幀 (Key Event Frames)
+        </h3>
+        <span class="text-xs text-slate-500">點擊任一階段卡片即可快速定位該瞬間</span>
+      </div>
+      <div id="eventCardsGrid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- Test History -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-6 rounded-full bg-violet-500"></span>
+          <h3 class="font-extrabold text-sm text-slate-800">測試歷史與主要差異</h3>
+          <span class="text-[11px] text-slate-500">保留在此瀏覽器，不會自動上傳</span>
+        </div>
+        <button onclick="clearTestHistory()" class="px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-bold text-slate-700">清除歷史</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-100 text-slate-600"><tr><th class="px-3 py-2">日期</th><th class="px-3 py-2">測試</th><th class="px-3 py-2 text-right">跳高</th><th class="px-3 py-2 text-right">騰空</th><th class="px-3 py-2 text-right">緩衝最低</th><th class="px-3 py-2">主要差異</th><th class="px-3 py-2"></th></tr></thead>
+          <tbody id="testHistoryBody"><tr><td colspan="7" class="px-3 py-5 text-center text-slate-400">完成一次影片比較或即時跳躍後，這裡會保留簡易摘要</td></tr></tbody>
+        </table>
+      </div>
+      <div id="latestReportLinkWrap" class="hidden px-4 py-3 border-t border-slate-100 bg-violet-50/60 text-xs">
+        <span class="font-semibold text-violet-900">本次報告檔：</span>
+        <a id="latestReportLink" class="ml-1 font-bold text-violet-700 underline" download>下載 / 開啟 HTML 報告</a>
+        <span class="ml-2 text-slate-500">此連結只在目前瀏覽器有效；要傳到 LINE 請使用「分享」或先下載檔案。</span>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-3 px-4 text-center text-xs text-slate-500 no-print">
+    JumpLab（JL）智慧跳躍影像分析 v3 ｜ 支援本機 MP4 / MOV / WebM 影片與即時 AI 骨架關節角度分析
+  </footer>
+
+  <!-- ===================================================================== -->
+  <!-- CORE JAVASCRIPT: POSE ENGINE, KINEMATICS, RENDERER & SYNC CONTROLLER  -->
+  <!-- ===================================================================== -->
+  <script>
+    // =========================================================================
+    // 1. GLOBAL STATE & CONFIGURATION
+    // =========================================================================
+    const GRAVITY = 9.80665; // m/s^2
+    let appMode = 'dual'; // 'dual' | 'single' | 'webcam'
+    let chartMetric = 'comY'; // 'comY' | 'velY' | 'kneeAngle' | 'hipAngle'
+    let angleSideMode = 'auto'; // 'auto' | 'right' | 'left' | 'both'
+    let globalSpeed = 0.5;
+    let isSyncPlaying = false;
+    let lastAnimTimestamp = 0;
+    let testHistory = loadTestHistory();
+    let latestReportObjectUrl = null;
+
+    // MediaPipe Pose instances (Tasks Vision + Legacy fallback)
+    let tasksPoseLandmarker = null;
+    let tasksVisionReady = false;
+    let mpPose = null;
+    let mpReady = false;
+
+    // Webcam state
+    let webcamStream = null;
+    let webcamAnimId = null;
+    const webcamJumpTracker = {
+      phase: 'idle',
+      baselineAnkleY: null,
+      baselineHipY: null,
+      takeoffAt: 0,
+      landingAt: 0,
+      peakAnkleY: null,
+      peakAt: 0,
+      bufferLowestHipY: null,
+      bufferLowestAt: 0,
+      peakHeightCm: 0,
+      history: [],
+      smoothedKeypoints: null
+    };
+
+    // Video Slots A and B Data Model
+    const slots = {
+      A: createEmptySlotState('A', 'baseline'),
+      B: createEmptySlotState('B', 'improved')
+    };
+
+    function createEmptySlotState(id, preset) {
+      return {
+        id,
+        preset,
+        sourceType: 'demo', // 'demo' | 'video'
+        videoEl: null,
+        videoUrl: null,
+        videoDuration: 0,
+        canvasEl: null,
+        ctx: null,
+        fps: 60,
+        subjectHeightCm: 175,
+        frames: [], // Cached per-frame kinematic objects
+        isBatchAnalyzed: false,
+        liveKeypoints: null, // Smoothed real-time keypoints during uncached video playback
+        liveDetectBusy: false,
+        lastDetectVideoTime: -1,
+        baseHipY: null,
+        baseAnkleY: null,
+        normToMeters: 1.8,
+        currentFrameIdx: 0,
+        isPlaying: false,
+        playAccumulator: 0,
+        events: {
+          startUnweight: 0,
+          lowestPoint: 0,
+          takeoff: 0,
+          peakFlight: 0,
+          landing: 0,
+          landingBufferLowest: 0,
+          endRecovery: 0
+        },
+        metrics: {}
+      };
+    }
+
+    // =========================================================================
+    // 2. INITIALIZATION & MEDIAPIPE SETUP
+    // =========================================================================
+    window.initTasksVisionLandmarker = async function () {
+      try {
+        if (!window.MPTasksVision) return;
+        const { PoseLandmarker, FilesetResolver } = window.MPTasksVision;
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+        tasksPoseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+            delegate: "GPU"
+          },
+          runningMode: "IMAGE",
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.50,
+          minPosePresenceConfidence: 0.50,
+          minTrackingConfidence: 0.50
+        });
+        tasksVisionReady = true;
+        const badge = document.getElementById('aiEngineBadge');
+        if (badge) {
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span>MediaPipe Tasks Vision AI 引擎已就緒';
+        }
+        ['A', 'B'].forEach(id => {
+          if (slots[id].sourceType === 'video' && !slots[id].isBatchAnalyzed) {
+            detectSingleFrameForVideo(id);
+          }
+        });
+      } catch (e) {
+        console.warn('Tasks Vision fallback to Legacy MediaPipe:', e);
+      }
+    };
+
+    window.onload = function () {
+      try {
+        slots.A.videoEl = document.getElementById('video-A');
+        slots.A.canvasEl = document.getElementById('canvas-A');
+        slots.A.ctx = slots.A.canvasEl.getContext('2d');
+
+        slots.B.videoEl = document.getElementById('video-B');
+        slots.B.canvasEl = document.getElementById('canvas-B');
+        slots.B.ctx = slots.B.canvasEl.getContext('2d');
+
+        bindVideoElementEvents('A');
+        bindVideoElementEvents('B');
+
+        setupDragAndDrop('dropzone-A', 'A');
+        setupDragAndDrop('dropzone-B', 'B');
+
+        initMediaPipePose();
+        if (window.MPTasksVision && !tasksVisionReady) {
+          window.initTasksVisionLandmarker();
+        }
+
+        // Load built-in biomechanical demo pair immediately
+        loadDemoPair(true);
+        updateProtocolLabels();
+        renderTestHistory();
+
+        // Handle responsive canvas resizing
+        resizeAllCanvases();
+        window.addEventListener('resize', resizeAllCanvases);
+
+        // Close export dropdown on outside click
+        document.addEventListener('click', (e) => {
+          const dd = document.getElementById('exportDropdown');
+          if (dd && !dd.parentElement.contains(e.target)) {
+            dd.classList.add('hidden');
+          }
+        });
+
+        // Start animation loop
+        requestAnimationFrame(mainAnimationLoop);
+      } catch (err) {
+        console.error('Initialization error:', err);
+        showToast('系統初始化發生異常，已啟用安全分析模式。', 'error');
+      }
+    };
+
+    function initMediaPipePose() {
+      try {
+        if (typeof Pose !== 'undefined') {
+          mpPose = new Pose({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+          });
+          mpPose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            minDetectionConfidence: 0.45,
+            minTrackingConfidence: 0.45
+          });
+          mpReady = true;
+          const badge = document.getElementById('aiEngineBadge');
+          if (badge && !tasksVisionReady) {
+            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span>MediaPipe AI 骨架引擎已連線';
+          }
+        }
+      } catch (e) {
+        console.warn('MediaPipe CDN fallback active:', e);
+        mpReady = false;
+      }
+    }
+
+    function bindVideoElementEvents(slotId) {
+      const slot = slots[slotId];
+      const video = slot.videoEl;
+      if (!video) return;
+
+      video.addEventListener('timeupdate', () => {
+        if (slot.sourceType !== 'video') return;
+        const idx = Math.min(
+          Math.max(0, slot.frames.length - 1),
+          Math.round(video.currentTime * slot.fps)
+        );
+        slot.currentFrameIdx = idx;
+        if (!slot.isBatchAnalyzed) {
+          detectSingleFrameForVideo(slotId);
+        }
+        drawSlotCanvas(slotId);
+        drawKinematicChart();
+      });
+
+      video.addEventListener('seeked', () => {
+        if (slot.sourceType !== 'video') return;
+        const idx = Math.min(
+          Math.max(0, slot.frames.length - 1),
+          Math.round(video.currentTime * slot.fps)
+        );
+        slot.currentFrameIdx = idx;
+        if (!slot.isBatchAnalyzed) {
+          detectSingleFrameForVideo(slotId);
+        }
+        drawSlotCanvas(slotId);
+        drawKinematicChart();
+      });
+
+      video.addEventListener('ended', () => {
+        if (slot.sourceType !== 'video') return;
+        slot.isPlaying = false;
+        if (!slots.A.isPlaying && !slots.B.isPlaying) {
+          isSyncPlaying = false;
+        }
+        updatePlayButtons();
+      });
+    }
+
+    function setAngleSideMode(mode) {
+      angleSideMode = mode;
+      document.querySelectorAll('.side-btn').forEach(btn => {
+        btn.className = 'side-btn px-2 py-0.5 rounded-md font-semibold text-slate-600 hover:bg-slate-100 transition';
+      });
+      const active = document.getElementById(`sideBtn-${mode}`);
+      if (active) {
+        active.className = 'side-btn px-2 py-0.5 rounded-md font-bold bg-[#124d3a] text-white transition';
+      }
+      redrawAll();
+    }
+
+    function resizeAllCanvases() {
+      ['A', 'B'].forEach(id => {
+        const container = document.getElementById(`dropzone-${id}`);
+        const canvas = slots[id].canvasEl;
+        if (container && canvas) {
+          const rect = container.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            canvas.width = Math.round(rect.width * (window.devicePixelRatio || 1));
+            canvas.height = Math.round(rect.height * (window.devicePixelRatio || 1));
+          }
+        }
+      });
+      const chartCanvas = document.getElementById('kinematicChart');
+      if (chartCanvas && chartCanvas.parentElement) {
+        const rect = chartCanvas.parentElement.getBoundingClientRect();
+        chartCanvas.width = Math.max(300, Math.round((rect.width - 16) * (window.devicePixelRatio || 1)));
+        chartCanvas.height = Math.max(200, Math.round((rect.height - 16) * (window.devicePixelRatio || 1)));
+      }
+      redrawAll();
+    }
+
+    // =========================================================================
+    // 3. DEMO DATA GENERATOR & BIOMECHANICAL KINEMATICS ENGINE
+    // =========================================================================
+    function loadDemoPair(silent = false) {
+      isSyncPlaying = false;
+      slots.A.isPlaying = false;
+      slots.B.isPlaying = false;
+      updatePlayButtons();
+
+      loadDemoIntoSlot('A', 'baseline', true);
+      loadDemoIntoSlot('B', 'improved', true);
+
+      updateAllAnalyticsUI();
+      redrawAll();
+      if (!silent) {
+        recordComparisonTest('範例比較');
+        showToast('已載入雙影片 CMJ 範例對照組（前測 vs. 後測）', 'success');
+      }
+    }
+
+    function loadDemoIntoSlot(slotId, preset, skipGlobalUpdate = false) {
+      const slot = slots[slotId];
+      slot.sourceType = 'demo';
+      slot.isBatchAnalyzed = false;
+      slot.liveKeypoints = null;
+      if (slot.videoEl) {
+        slot.videoEl.pause();
+        slot.videoEl.classList.add('hidden');
+      }
+      const batchBtn = document.getElementById(`batchBtn-${slotId}`);
+      if (batchBtn) batchBtn.classList.add('hidden');
+
+      slot.preset = preset;
+      slot.fps = parseInt(document.getElementById(`fps-${slotId}`).value) || 60;
+      slot.subjectHeightCm = parseFloat(document.getElementById(`height-${slotId}`).value) || 175;
+
+      const synthetic = generateSyntheticJumpFrames(preset, slot.fps, slot.subjectHeightCm);
+      const analyzed = computeKinematicsFromFrames(synthetic.frames, slot.fps, slot.subjectHeightCm);
+
+      slot.frames = analyzed.frames;
+      slot.events = analyzed.events;
+      slot.metrics = analyzed.metrics;
+      slot.currentFrameIdx = analyzed.events.lowestPoint;
+
+      document.getElementById(`hudMode-${slotId}`).textContent = '模擬引擎';
+      document.getElementById(`status-${slotId}`).textContent =
+        preset === 'baseline'
+          ? `內建範例：一般反向跳 (JH: ${slot.metrics.jumpHeightFT.toFixed(1)} cm)`
+          : `內建範例：優化發力反向跳 (JH: ${slot.metrics.jumpHeightFT.toFixed(1)} cm)`;
+
+      setupScrubberAndPhaseBar(slotId);
+
+      if (!skipGlobalUpdate) {
+        updateAllAnalyticsUI();
+        redrawAll();
+        showToast(`已載入範例動作至影片 ${slotId}`, 'info');
+      }
+    }
+
+    /**
+     * Generates anatomically accurate 2D/3D-projected human skeleton frames for a full CMJ cycle
+     */
+    function generateSyntheticJumpFrames(preset, fps, heightCm) {
+      const totalDuration = 2.1; // seconds
+      const totalFrames = Math.round(totalDuration * fps);
+      const frames = [];
+
+      // Preset differences: 'improved' has deeper/faster eccentric, stronger triple extension, higher flight
+      const isImproved = preset === 'improved';
+      const squatDepthNorm = isImproved ? 0.145 : 0.118; // normalized hip drop
+      const jumpPeakNorm = isImproved ? 0.175 : 0.142;   // normalized hip rise above standing
+      const trunkLeanMax = isImproved ? 17 : 26;         // degrees forward lean at bottom
+      const kneeMinTarget = isImproved ? 84 : 96;        // degrees at lowest squat
+
+      // Key timestamps (seconds)
+      const tStartUnweight = 0.28;
+      const tLowest = isImproved ? 0.72 : 0.78;
+      const tTakeoff = isImproved ? 0.98 : 1.08;
+      const flightDuration = isImproved ? 0.562 : 0.506; // ~38.7cm vs ~31.4cm
+      const tLanding = tTakeoff + flightDuration;
+      const tPeakFlight = (tTakeoff + tLanding) / 2;
+      const tEndRecovery = Math.min(totalDuration - 0.05, tLanding + 0.36);
+
+      const groundY = 0.86;
+      const baseX = 0.50;
+
+      // Anatomical segment lengths (normalized to canvas height)
+      const shankLen = 0.195;
+      const thighLen = 0.205;
+      const torsoLen = 0.245;
+      const headLen = 0.085;
+      const upperArmLen = 0.135;
+      const forearmLen = 0.125;
+
+      for (let i = 0; i < totalFrames; i++) {
+        const t = i / fps;
+        let hipOffsetY = 0; // positive = downward in canvas
+        let footLiftY = 0;  // positive = upward off ground
+        let armSwingDeg = -12; // relative to torso (- = slightly behind, + = swung forward/up)
+        let kneeFlexFactor = 0; // 0 = standing straight, 1 = deepest squat
+        let landingFlexFactor = 0;
+
+        if (t < tStartUnweight) {
+          // Quiet standing
+          hipOffsetY = 0;
+          kneeFlexFactor = 0.02;
+          armSwingDeg = -8;
+        } else if (t < tLowest) {
+          // Eccentric unweighting & braking down to lowest point
+          const u = (t - tStartUnweight) / (tLowest - tStartUnweight);
+          const ease = 0.5 - 0.5 * Math.cos(Math.PI * u);
+          hipOffsetY = squatDepthNorm * ease;
+          kneeFlexFactor = ease;
+          armSwingDeg = -8 - 38 * Math.sin(Math.PI * u * 0.85); // arms swing back
+        } else if (t < tTakeoff) {
+          // Concentric propulsion phase
+          const u = (t - tLowest) / (tTakeoff - tLowest);
+          const ease = Math.pow(u, 1.35);
+          hipOffsetY = squatDepthNorm * (1 - ease) - 0.025 * ease; // slight plantarflexion rise at takeoff
+          kneeFlexFactor = Math.max(0, 1 - ease * 1.05);
+          armSwingDeg = -42 + 155 * Math.sin((Math.PI / 2) * u); // vigorous upward arm swing
+        } else if (t < tLanding) {
+          // Flight phase (parabolic trajectory)
+          const u = (t - tTakeoff) / flightDuration; // 0 -> 1
+          const parabola = 4 * u * (1 - u); // 0 -> 1 -> 0
+          footLiftY = jumpPeakNorm * parabola;
+          hipOffsetY = -0.025 - footLiftY;
+          // Slight mid-air tuck
+          kneeFlexFactor = 0.14 * Math.sin(Math.PI * u);
+          armSwingDeg = 110 - 65 * u;
+        } else if (t < tEndRecovery) {
+          // Landing impact & absorption
+          const u = (t - tLanding) / (tEndRecovery - tLanding);
+          const impactCurve = Math.sin(Math.PI * u);
+          hipOffsetY = (squatDepthNorm * 0.68) * impactCurve;
+          landingFlexFactor = impactCurve * 0.65;
+          kneeFlexFactor = landingFlexFactor;
+          armSwingDeg = 45 * (1 - u);
+        } else {
+          // Return to standing
+          hipOffsetY = 0;
+          kneeFlexFactor = 0.02;
+          armSwingDeg = -8;
+        }
+
+        // Compute joint positions from ankle upward (side-view sagittal plane with slight 3D offset for L/R limbs)
+        const ankleY = groundY - 0.035 - footLiftY;
+        const ankleX = baseX;
+
+        // Knee angle interpolation
+        const currentKneeDeg = 175 - (175 - kneeMinTarget) * kneeFlexFactor;
+        const kneeRad = (currentKneeDeg * Math.PI) / 180;
+
+        // Trunk forward lean increases with squat depth
+        const currentTrunkLeanDeg = 5 + (trunkLeanMax - 5) * kneeFlexFactor;
+        const trunkRad = (currentTrunkLeanDeg * Math.PI) / 180;
+
+        // Solve knee and hip coordinates
+        const shankForwardTilt = 0.12 + 0.34 * kneeFlexFactor; // radians forward from vertical
+        const kneeX = ankleX + Math.sin(shankForwardTilt) * shankLen;
+        const kneeY = ankleY - Math.cos(shankForwardTilt) * shankLen;
+
+        // Thigh angle derived from knee angle
+        const thighBackTilt = Math.PI - kneeRad - shankForwardTilt;
+        const hipX = kneeX - Math.sin(thighBackTilt) * thighLen;
+        const hipY = kneeY - Math.cos(thighBackTilt) * thighLen;
+
+        // Shoulder & Head
+        const shoulderX = hipX + Math.sin(trunkRad) * torsoLen;
+        const shoulderY = hipY - Math.cos(trunkRad) * torsoLen;
+
+        const noseX = shoulderX + Math.sin(trunkRad * 0.7) * (headLen * 0.45) + 0.015;
+        const noseY = shoulderY - Math.cos(trunkRad * 0.7) * headLen;
+
+        // Arms (Elbow & Wrist)
+        const armRad = ((armSwingDeg - currentTrunkLeanDeg) * Math.PI) / 180;
+        const elbowX = shoulderX + Math.sin(armRad) * upperArmLen;
+        const elbowY = shoulderY + Math.cos(armRad) * upperArmLen;
+
+        const forearmRad = armRad + 0.32;
+        const wristX = elbowX + Math.sin(forearmRad) * forearmLen;
+        const wristY = elbowY + Math.cos(forearmRad) * forearmLen;
+
+        // Foot (Heel & Toe)
+        const toeX = ankleX + 0.068;
+        const toeY = ankleY + 0.028 * (1 - (footLiftY > 0 ? 0.3 : 0));
+        const heelX = ankleX - 0.025;
+        const heelY = ankleY + 0.028;
+
+        // Slight depth offset between Right (near camera) and Left (far) limbs for 3D clarity
+        const depthOffset = isImproved ? -0.008 : -0.014;
+
+        const keypoints = {
+          nose: { x: noseX, y: noseY, score: 0.99 },
+          leftShoulder: { x: shoulderX + depthOffset, y: shoulderY - 0.005, score: 0.98 },
+          rightShoulder: { x: shoulderX, y: shoulderY, score: 0.99 },
+          leftElbow: { x: elbowX + depthOffset, y: elbowY - 0.005, score: 0.97 },
+          rightElbow: { x: elbowX, y: elbowY, score: 0.98 },
+          leftWrist: { x: wristX + depthOffset, y: wristY - 0.005, score: 0.96 },
+          rightWrist: { x: wristX, y: wristY, score: 0.97 },
+          leftHip: { x: hipX + depthOffset, y: hipY - 0.004, score: 0.99 },
+          rightHip: { x: hipX, y: hipY, score: 0.99 },
+          leftKnee: { x: kneeX + depthOffset * 1.2, y: kneeY - 0.004, score: 0.99 },
+          rightKnee: { x: kneeX, y: kneeY, score: 0.99 },
+          leftAnkle: { x: ankleX + depthOffset, y: ankleY - 0.003, score: 0.99 },
+          rightAnkle: { x: ankleX, y: ankleY, score: 0.99 },
+          leftHeel: { x: heelX + depthOffset, y: heelY - 0.003, score: 0.98 },
+          rightHeel: { x: heelX, y: heelY, score: 0.98 },
+          leftFootIndex: { x: toeX + depthOffset, y: toeY - 0.003, score: 0.98 },
+          rightFootIndex: { x: toeX, y: toeY, score: 0.98 }
+        };
+
+        frames.push({
+          frameIdx: i,
+          time: t,
+          keypoints,
+          groundY
+        });
+      }
+
+      return { frames };
+    }
+
+    /**
+     * Computes joint angles, Center of Mass (COM) displacement, velocity,
+     * automatic jump phase segmentation, and gold-standard biomechanical KPIs.
+     */
+    function computeKinematicsFromFrames(rawFrames, fps, subjectHeightCm) {
+      const n = rawFrames.length;
+      if (n === 0) return { frames: [], events: {}, metrics: {} };
+
+      // Calibrate pixel-to-meter scale using standing body height (~90% of nose-to-ankle span)
+      const f0 = rawFrames[0].keypoints;
+      const standingNoseY = f0.nose.y;
+      const standingAnkleY = (f0.leftAnkle.y + f0.rightAnkle.y) / 2;
+      const normBodySpan = Math.max(0.2, standingAnkleY - standingNoseY);
+      const subjectHeightM = subjectHeightCm / 100;
+      const normToMeters = (subjectHeightM * 0.91) / normBodySpan;
+
+      // Baseline standing hip Y (proxy for Center of Mass)
+      const baseHipY = (f0.leftHip.y + f0.rightHip.y) / 2;
+      const baseAnkleY = standingAnkleY;
+
+      const frames = rawFrames.map((f, idx) => {
+        const kp = f.keypoints;
+        const midHip = { x: (kp.leftHip.x + kp.rightHip.x) / 2, y: (kp.leftHip.y + kp.rightHip.y) / 2 };
+        const midShoulder = { x: (kp.leftShoulder.x + kp.rightShoulder.x) / 2, y: (kp.leftShoulder.y + kp.rightShoulder.y) / 2 };
+        const midKnee = { x: (kp.leftKnee.x + kp.rightKnee.x) / 2, y: (kp.leftKnee.y + kp.rightKnee.y) / 2 };
+        const midAnkle = { x: (kp.leftAnkle.x + kp.rightAnkle.x) / 2, y: (kp.leftAnkle.y + kp.rightAnkle.y) / 2 };
+
+        // Joint angles
+        const leftKneeAng = calculateAngleDeg(kp.leftHip, kp.leftKnee, kp.leftAnkle);
+        const rightKneeAng = calculateAngleDeg(kp.rightHip, kp.rightKnee, kp.rightAnkle);
+        const leftHipAng = calculateAngleDeg(kp.leftShoulder, kp.leftHip, kp.leftKnee);
+        const rightHipAng = calculateAngleDeg(kp.rightShoulder, kp.rightHip, kp.rightKnee);
+        const leftAnkleAng = calculateAngleDeg(kp.leftKnee, kp.leftAnkle, kp.leftFootIndex);
+        const rightAnkleAng = calculateAngleDeg(kp.rightKnee, kp.rightAnkle, kp.rightFootIndex);
+
+        const kneeAngle = (leftKneeAng + rightKneeAng) / 2;
+        const hipAngle = (leftHipAng + rightHipAng) / 2;
+        const ankleAngle = (leftAnkleAng + rightAnkleAng) / 2;
+
+        // Trunk Lean relative to vertical upward vector
+        const dx = Math.abs(midShoulder.x - midHip.x);
+        const dy = Math.max(0.001, midHip.y - midShoulder.y);
+        const trunkLean = (Math.atan2(dx, dy) * 180) / Math.PI;
+
+        // Vertical COM displacement in cm (+ = upward above standing, - = downward squat)
+        const comY_cm = (baseHipY - midHip.y) * normToMeters * 100;
+        const ankleLift_cm = (baseAnkleY - midAnkle.y) * normToMeters * 100;
+
+        return {
+          ...f,
+          time: f.time !== undefined ? f.time : idx / fps,
+          midHip,
+          midShoulder,
+          midKnee,
+          midAnkle,
+          kneeAngle,
+          hipAngle,
+          ankleAngle,
+          trunkLean,
+          comY_cm,
+          ankleLift_cm,
+          leftKneeAng,
+          rightKneeAng,
+          leftHipAng,
+          rightHipAng,
+          leftAnkleAng,
+          rightAnkleAng,
+          velY_ms: 0,
+          phase: '站立準備期'
+        };
+      });
+
+      // Compute central-difference vertical velocity (m/s)
+      for (let i = 0; i < n; i++) {
+        const prev = frames[Math.max(0, i - 1)];
+        const next = frames[Math.min(n - 1, i + 1)];
+        const dt = Math.max(1 / fps, next.time - prev.time);
+        frames[i].velY_ms = ((next.comY_cm - prev.comY_cm) / 100) / dt;
+      }
+
+      // Automatic Key Event Detection
+      let lowestPoint = 0;
+      let minComY = Infinity;
+      const searchEnd = Math.floor(n * 0.72);
+      for (let i = 0; i < searchEnd; i++) {
+        if (frames[i].comY_cm < minComY) {
+          minComY = frames[i].comY_cm;
+          lowestPoint = i;
+        }
+      }
+
+      // Start of unweighting: work backward from lowestPoint until comY returns near 0
+      let startUnweight = 0;
+      for (let i = lowestPoint; i >= 0; i--) {
+        if (frames[i].comY_cm > -1.2) {
+          startUnweight = i;
+          break;
+        }
+      }
+
+      // Flight phase detection via ankle lift threshold (> 3.8 cm) or positive COM peak
+      const liftThresholdCm = 3.8;
+      let takeoff = lowestPoint + 1;
+      for (let i = lowestPoint; i < n; i++) {
+        if (frames[i].ankleLift_cm > liftThresholdCm) {
+          takeoff = i;
+          break;
+        }
+      }
+
+      let landing = Math.min(n - 1, takeoff + Math.round(0.35 * fps));
+      for (let i = takeoff + 2; i < n; i++) {
+        if (frames[i].ankleLift_cm <= liftThresholdCm) {
+          landing = i;
+          break;
+        }
+      }
+
+      // Peak flight frame
+      let peakFlight = Math.round((takeoff + landing) / 2);
+      let maxComY = -Infinity;
+      for (let i = takeoff; i <= landing; i++) {
+        if (frames[i].comY_cm > maxComY) {
+          maxComY = frames[i].comY_cm;
+          peakFlight = i;
+        }
+      }
+
+      // End of landing recovery
+      let endRecovery = Math.min(n - 1, landing + Math.round(0.35 * fps));
+      let minLandingCom = Infinity;
+      let landingBufferLowest = landing;
+      for (let i = landing; i < Math.min(n, landing + Math.round(0.45 * fps)); i++) {
+        if (frames[i].comY_cm < minLandingCom) {
+          minLandingCom = frames[i].comY_cm;
+          landingBufferLowest = i;
+          endRecovery = Math.min(n - 1, i + Math.round(0.15 * fps));
+        }
+      }
+
+      // Label every frame with its biomechanical phase
+      frames.forEach((f, i) => {
+        if (i < startUnweight) {
+          f.phase = '1. 準備站立期';
+          f.phaseCode = 'stand';
+        } else if (i < lowestPoint) {
+          f.phase = '2. 離心下蹲期';
+          f.phaseCode = 'eccentric';
+        } else if (i === lowestPoint) {
+          f.phase = '3. 最低轉換點';
+          f.phaseCode = 'amortization';
+        } else if (i < takeoff) {
+          f.phase = '4. 向心推蹬期';
+          f.phaseCode = 'concentric';
+        } else if (i <= landing) {
+          f.phase = '5. 騰空飛行期';
+          f.phaseCode = 'flight';
+        } else {
+          f.phase = '6. 落地緩衝期';
+          f.phaseCode = 'landing';
+        }
+      });
+
+      // Biomechanical Metrics Calculations
+      const flightTimeSec = Math.max(0.05, (landing - takeoff) / fps);
+      const jumpHeightFT = ((GRAVITY * Math.pow(flightTimeSec, 2)) / 8) * 100; // cm
+      const jumpHeightCOM = Math.max(0, frames[peakFlight].comY_cm);
+      const eccentricDepthCm = Math.abs(frames[lowestPoint].comY_cm);
+      const eccentricTimeSec = Math.max(0.05, (lowestPoint - startUnweight) / fps);
+      const concentricTimeSec = Math.max(0.05, (takeoff - lowestPoint) / fps);
+      const contractionTimeSec = eccentricTimeSec + concentricTimeSec;
+      const rsiMod = (jumpHeightFT / 100) / contractionTimeSec; // m / s
+
+      let peakConcentricVel = 0;
+      for (let i = lowestPoint; i <= takeoff; i++) {
+        if (frames[i].velY_ms > peakConcentricVel) {
+          peakConcentricVel = frames[i].velY_ms;
+        }
+      }
+
+      // Bilateral symmetry index at takeoff (%)
+      const fTakeoff = frames[takeoff];
+      const symDiff = Math.abs(fTakeoff.leftKneeAng - fTakeoff.rightKneeAng);
+      const symmetryPct = Math.max(70, Math.min(100, 100 - symDiff * 1.4));
+
+      const metrics = {
+        jumpHeightFT,
+        jumpHeightCOM,
+        flightTimeMs: flightTimeSec * 1000,
+        contractionTimeMs: contractionTimeSec * 1000,
+        eccentricTimeMs: eccentricTimeSec * 1000,
+        concentricTimeMs: concentricTimeSec * 1000,
+        rsiMod,
+        eccentricDepthCm,
+        peakConcentricVel,
+        minKneeAngle: frames[lowestPoint].kneeAngle,
+        minHipAngle: frames[lowestPoint].hipAngle,
+        maxTrunkLean: frames[lowestPoint].trunkLean,
+        landingKneeAngle: frames[Math.min(n - 1, landing + Math.round(0.08 * fps))].kneeAngle,
+        landingBufferDepthCm: Math.abs(frames[landingBufferLowest].comY_cm),
+        symmetryPct
+      };
+
+      return {
+        frames,
+        baseHipY,
+        baseAnkleY,
+        normToMeters,
+        events: {
+          startUnweight,
+          lowestPoint,
+          takeoff,
+          peakFlight,
+          landing,
+          landingBufferLowest,
+          endRecovery
+        },
+        metrics
+      };
+    }
+
+    function calculateAngleDeg(A, B, C) {
+      if (!A || !B || !C) return 180;
+      const abx = A.x - B.x;
+      const aby = A.y - B.y;
+      const cbx = C.x - B.x;
+      const cby = C.y - B.y;
+      const dot = abx * cbx + aby * cby;
+      const magAB = Math.hypot(abx, aby);
+      const magCB = Math.hypot(cbx, cby);
+      if (magAB * magCB === 0) return 180;
+      const cosTheta = Math.max(-1, Math.min(1, dot / (magAB * magCB)));
+      return (Math.acos(cosTheta) * 180) / Math.PI;
+    }
+
+    // =========================================================================
+    // 4. REAL VIDEO UPLOAD & MEDIAPIPE POSE EXTRACTION
+    // =========================================================================
+    function setupDragAndDrop(dropzoneId, slotId) {
+      const dz = document.getElementById(dropzoneId);
+      if (!dz) return;
+      dz.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dz.classList.add('ring-4', 'ring-emerald-400');
+      });
+      dz.addEventListener('dragleave', () => {
+        dz.classList.remove('ring-4', 'ring-emerald-400');
+      });
+      dz.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dz.classList.remove('ring-4', 'ring-emerald-400');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          processUploadedVideoFile(e.dataTransfer.files[0], slotId);
+        }
+      });
+    }
+
+    function handleVideoUpload(event, slotId) {
+      const file = event.target.files[0];
+      if (file) {
+        processUploadedVideoFile(file, slotId);
+      }
+      event.target.value = '';
+    }
+
+    async function processUploadedVideoFile(file, slotId) {
+      const slot = slots[slotId];
+      slot.isPlaying = false;
+      isSyncPlaying = false;
+      updatePlayButtons();
+
+      try {
+        if (slot.videoUrl) {
+          URL.revokeObjectURL(slot.videoUrl);
+        }
+        const url = URL.createObjectURL(file);
+        slot.videoUrl = url;
+        const video = slot.videoEl;
+        video.src = url;
+        video.muted = true;
+        video.playsInline = true;
+        video.classList.remove('hidden');
+
+        await new Promise((resolve, reject) => {
+          video.onloadedmetadata = () => resolve();
+          video.onerror = () => reject(new Error('無法讀取影片格式'));
+        });
+
+        slot.sourceType = 'video';
+        slot.isBatchAnalyzed = false;
+        slot.liveKeypoints = null;
+        slot.lastDetectVideoTime = -1;
+        slot.baseHipY = null;
+        slot.baseAnkleY = null;
+        slot.videoDuration = video.duration;
+        slot.fps = parseInt(document.getElementById(`fps-${slotId}`).value) || 60;
+        slot.subjectHeightCm = parseFloat(document.getElementById(`height-${slotId}`).value) || 175;
+
+        // Show the Batch Analyze button
+        const batchBtn = document.getElementById(`batchBtn-${slotId}`);
+        if (batchBtn) {
+          batchBtn.classList.remove('hidden');
+          batchBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>全片骨架掃描';
+        }
+
+        // Initialize timeline frames skeleton array matching video duration
+        const totalFrames = Math.max(10, Math.round(video.duration * slot.fps));
+        slot.frames = new Array(totalFrames).fill(null);
+        slot.currentFrameIdx = 0;
+
+        document.getElementById(`status-${slotId}`).textContent =
+          `真實影片：${file.name} (${video.videoWidth}×${video.videoHeight}, ${video.duration.toFixed(2)}s)`;
+        document.getElementById(`hudMode-${slotId}`).textContent =
+          (tasksVisionReady || mpReady) ? 'AI 即時追蹤' : '影像疊加';
+
+        // Seek to t=0.05s to grab initial pose immediately
+        video.currentTime = Math.min(0.05, video.duration * 0.1);
+        await new Promise(res => {
+          const done = () => { video.removeEventListener('seeked', done); res(); };
+          video.addEventListener('seeked', done);
+        });
+
+        setupScrubberAndPhaseBar(slotId);
+        await detectSingleFrameForVideo(slotId);
+        drawSlotCanvas(slotId);
+        showToast(`已載入真實影片「${file.name}」！播放時即時追蹤骨架，或點擊「全片骨架掃描」產生完整曲線。`, 'success');
+      } catch (err) {
+        console.error(err);
+        showToast(`影片載入失敗：${err.message}`, 'error');
+      }
+    }
+
+    /**
+     * Real-time AI Pose Detection on the currently visible <video> frame
+     * Applies temporal exponential smoothing so skeleton & joint angles stick smoothly to the jumper.
+     */
+    async function detectSingleFrameForVideo(slotId) {
+      const slot = slots[slotId];
+      const video = slot.videoEl;
+      if (!video || slot.sourceType !== 'video' || video.readyState < 2) return;
+      if (slot.liveDetectBusy) return;
+      if (Math.abs(video.currentTime - slot.lastDetectVideoTime) < 0.008 && slot.liveKeypoints) return;
+
+      slot.liveDetectBusy = true;
+      slot.lastDetectVideoTime = video.currentTime;
+
+      try {
+        let detectedKp = null;
+
+        if (tasksVisionReady && tasksPoseLandmarker) {
+          const result = tasksPoseLandmarker.detect(video);
+          if (result && result.landmarks && result.landmarks.length > 0) {
+            detectedKp = mapMediaPipeToKeypoints(result.landmarks[0]);
+          }
+        } else if (mpReady && mpPose) {
+          let mpLm = null;
+          mpPose.onResults((res) => {
+            mpLm = res.poseLandmarks || null;
+          });
+          await mpPose.send({ image: video });
+          if (mpLm && mpLm.length >= 33) {
+            detectedKp = mapMediaPipeToKeypoints(mpLm);
+          }
+        }
+
+        if (detectedKp) {
+          const smoothed = smoothKeypoints(slot.liveKeypoints, detectedKp, 0.68);
+          slot.liveKeypoints = smoothed;
+
+          const midHipY = (smoothed.leftHip.y + smoothed.rightHip.y) / 2;
+          const midAnkleY = (smoothed.leftAnkle.y + smoothed.rightAnkle.y) / 2;
+          if (slot.baseHipY === null) {
+            slot.baseHipY = midHipY;
+            slot.baseAnkleY = midAnkleY;
+            const bodyNormH = Math.max(0.18, midAnkleY - smoothed.nose.y);
+            slot.normToMeters = ((slot.subjectHeightCm / 100) * 0.91) / bodyNormH;
+          }
+
+          const frameObj = buildSingleFrameKinematic(
+            smoothed,
+            slot.currentFrameIdx,
+            video.currentTime,
+            slot.baseHipY,
+            slot.baseAnkleY,
+            slot.normToMeters
+          );
+          slot.frames[slot.currentFrameIdx] = frameObj;
+          drawSlotCanvas(slotId);
+        }
+      } catch (e) {
+        console.warn('Frame pose detect skipped:', e);
+      } finally {
+        slot.liveDetectBusy = false;
+      }
+    }
+
+    function smoothKeypoints(prev, curr, alpha = 0.65) {
+      if (!prev) return curr;
+      const out = {};
+      for (const k of Object.keys(curr)) {
+        if (prev[k] && curr[k]) {
+          const score = Number.isFinite(curr[k].score) ? curr[k].score : 0.9;
+          if (score < 0.35) {
+            out[k] = { ...prev[k], score };
+            continue;
+          }
+          const adaptiveAlpha = score < 0.55 ? alpha * 0.45 : alpha;
+          out[k] = {
+            x: prev[k].x * (1 - adaptiveAlpha) + curr[k].x * adaptiveAlpha,
+            y: prev[k].y * (1 - adaptiveAlpha) + curr[k].y * adaptiveAlpha,
+            score
+          };
+        } else {
+          out[k] = curr[k];
+        }
+      }
+      return out;
+    }
+
+    function buildSingleFrameKinematic(kp, frameIdx, timeSec, baseHipY, baseAnkleY, normToMeters) {
+      const midHip = { x: (kp.leftHip.x + kp.rightHip.x) / 2, y: (kp.leftHip.y + kp.rightHip.y) / 2 };
+      const midShoulder = { x: (kp.leftShoulder.x + kp.rightShoulder.x) / 2, y: (kp.leftShoulder.y + kp.rightShoulder.y) / 2 };
+      const midKnee = { x: (kp.leftKnee.x + kp.rightKnee.x) / 2, y: (kp.leftKnee.y + kp.rightKnee.y) / 2 };
+      const midAnkle = { x: (kp.leftAnkle.x + kp.rightAnkle.x) / 2, y: (kp.leftAnkle.y + kp.rightAnkle.y) / 2 };
+
+      const leftKneeAng = calculateAngleDeg(kp.leftHip, kp.leftKnee, kp.leftAnkle);
+      const rightKneeAng = calculateAngleDeg(kp.rightHip, kp.rightKnee, kp.rightAnkle);
+      const leftHipAng = calculateAngleDeg(kp.leftShoulder, kp.leftHip, kp.leftKnee);
+      const rightHipAng = calculateAngleDeg(kp.rightShoulder, kp.rightHip, kp.rightKnee);
+      const leftAnkleAng = calculateAngleDeg(kp.leftKnee, kp.leftAnkle, kp.leftFootIndex);
+      const rightAnkleAng = calculateAngleDeg(kp.rightKnee, kp.rightAnkle, kp.rightFootIndex);
+
+      const kneeAngle = (leftKneeAng + rightKneeAng) / 2;
+      const hipAngle = (leftHipAng + rightHipAng) / 2;
+      const ankleAngle = (leftAnkleAng + rightAnkleAng) / 2;
+
+      const dx = Math.abs(midShoulder.x - midHip.x);
+      const dy = Math.max(0.001, midHip.y - midShoulder.y);
+      const trunkLean = (Math.atan2(dx, dy) * 180) / Math.PI;
+
+      const comY_cm = baseHipY !== null ? (baseHipY - midHip.y) * normToMeters * 100 : 0;
+      const ankleLift_cm = baseAnkleY !== null ? (baseAnkleY - midAnkle.y) * normToMeters * 100 : 0;
+
+      let phase = '即時追蹤中';
+      let phaseCode = 'stand';
+      if (ankleLift_cm > 4.2) {
+        phase = '5. 騰空飛行期';
+        phaseCode = 'flight';
+      } else if (comY_cm < -4.0) {
+        phase = '2. 離心下蹲 / 緩衝';
+        phaseCode = 'eccentric';
+      } else if (comY_cm > 3.5) {
+        phase = '4. 向心推蹬起跳';
+        phaseCode = 'concentric';
+      }
+
+      return {
+        frameIdx,
+        time: timeSec,
+        keypoints: kp,
+        groundY: baseAnkleY ? Math.min(0.96, baseAnkleY + 0.025) : 0.90,
+        midHip,
+        midShoulder,
+        midKnee,
+        midAnkle,
+        kneeAngle,
+        hipAngle,
+        ankleAngle,
+        leftKneeAng,
+        rightKneeAng,
+        leftHipAng,
+        rightHipAng,
+        leftAnkleAng,
+        rightAnkleAng,
+        trunkLean,
+        comY_cm,
+        ankleLift_cm,
+        velY_ms: 0,
+        phase,
+        phaseCode
+      };
+    }
+
+    /**
+     * Batch Analyze Entire Video:
+     * Steps through the entire uploaded <video>, extracts all 33 AI landmarks per frame,
+     * caches them for zero-latency playback, and computes full jump phase events & metrics.
+     */
+    async function batchAnalyzeVideo(slotId) {
+      const slot = slots[slotId];
+      const video = slot.videoEl;
+      if (!video || slot.sourceType !== 'video') {
+        showToast('請先上傳真實跳躍影片再執行全片掃描。', 'warning');
+        return;
+      }
+      if (!tasksVisionReady && !mpReady) {
+        showToast('AI 姿態模型仍在載入中，請稍候幾秒再試。', 'warning');
+        return;
+      }
+
+      slot.isPlaying = false;
+      isSyncPlaying = false;
+      updatePlayButtons();
+      video.pause();
+
+      const overlay = document.getElementById(`procOverlay-${slotId}`);
+      const procText = document.getElementById(`procText-${slotId}`);
+      const procBar = document.getElementById(`procBar-${slotId}`);
+      overlay.classList.remove('hidden');
+
+      try {
+        const duration = Math.min(video.duration, 6.0);
+        const sampleFps = Math.min(slot.fps, 60);
+        const totalSamples = Math.max(15, Math.min(240, Math.floor(duration * sampleFps)));
+        const extractedFrames = [];
+        let prevSmoothed = null;
+
+        let latestMpLm = null;
+        if (!tasksVisionReady && mpReady && mpPose) {
+          mpPose.onResults((results) => {
+            latestMpLm = results.poseLandmarks || null;
+          });
+        }
+
+        for (let i = 0; i < totalSamples; i++) {
+          const targetTime = (i / Math.max(1, totalSamples - 1)) * Math.max(0.05, duration - 0.02);
+          video.currentTime = targetTime;
+          await new Promise(res => {
+            const onSeeked = () => {
+              video.removeEventListener('seeked', onSeeked);
+              res();
+            };
+            video.addEventListener('seeked', onSeeked);
+          });
+
+          let kp = null;
+          if (tasksVisionReady && tasksPoseLandmarker) {
+            const res = tasksPoseLandmarker.detect(video);
+            if (res && res.landmarks && res.landmarks.length > 0) {
+              kp = mapMediaPipeToKeypoints(res.landmarks[0]);
+            }
+          } else if (mpReady && mpPose) {
+            latestMpLm = null;
+            await mpPose.send({ image: video });
+            if (latestMpLm && latestMpLm.length >= 33) {
+              kp = mapMediaPipeToKeypoints(latestMpLm);
+            }
+          }
+
+          if (kp) {
+            kp = smoothKeypoints(prevSmoothed, kp, 0.72);
+            prevSmoothed = kp;
+          } else if (prevSmoothed) {
+            kp = prevSmoothed;
+          } else {
+            kp = generateSyntheticJumpFrames('baseline', sampleFps, slot.subjectHeightCm).frames[0].keypoints;
+          }
+
+          extractedFrames.push({
+            frameIdx: i,
+            time: targetTime,
+            keypoints: kp,
+            groundY: 0.90
+          });
+
+          const pct = Math.round(((i + 1) / totalSamples) * 100);
+          procText.textContent = `AI 骨架掃描進度：${pct}% (${i + 1} / ${totalSamples} 幀)`;
+          if (procBar) procBar.style.width = `${pct}%`;
+        }
+
+        const result = computeKinematicsFromFrames(extractedFrames, sampleFps, slot.subjectHeightCm);
+        const groundNormY = Math.min(0.96, (result.baseAnkleY || 0.88) + 0.02);
+        result.frames.forEach(f => { f.groundY = groundNormY; });
+
+        slot.frames = result.frames;
+        slot.events = result.events;
+        slot.metrics = result.metrics;
+        slot.isBatchAnalyzed = true;
+        slot.fps = sampleFps;
+        slot.currentFrameIdx = result.events.lowestPoint || 0;
+
+        const targetFrame = slot.frames[slot.currentFrameIdx];
+        if (targetFrame) {
+          video.currentTime = targetFrame.time;
+        }
+
+        document.getElementById(`hudMode-${slotId}`).textContent = '全片快取完成';
+        const batchBtn = document.getElementById(`batchBtn-${slotId}`);
+        if (batchBtn) {
+          batchBtn.innerHTML = `✓ 已掃描 (${totalSamples}幀)`;
+        }
+
+        setupScrubberAndPhaseBar(slotId);
+        updateAllAnalyticsUI();
+        redrawAll();
+        if (slots.A.isBatchAnalyzed && slots.B.isBatchAnalyzed) {
+          recordComparisonTest('影片比較');
+        }
+        showToast(`影片 ${slotId} 全片骨架掃描完成！現在播放與拖曳進度條皆為零延遲精準追蹤。`, 'success');
+      } catch (err) {
+        console.error(err);
+        showToast(`全片掃描發生錯誤：${err.message}`, 'error');
+      } finally {
+        overlay.classList.add('hidden');
+      }
+    }
+
+    function mapMediaPipeToKeypoints(lm) {
+      const p = (idx) => ({ x: lm[idx].x, y: lm[idx].y, score: Number.isFinite(lm[idx].visibility) ? lm[idx].visibility : 0.9 });
+      return {
+        nose: p(0),
+        leftShoulder: p(11),
+        rightShoulder: p(12),
+        leftElbow: p(13),
+        rightElbow: p(14),
+        leftWrist: p(15),
+        rightWrist: p(16),
+        leftHip: p(23),
+        rightHip: p(24),
+        leftKnee: p(25),
+        rightKnee: p(26),
+        leftAnkle: p(27),
+        rightAnkle: p(28),
+        leftHeel: p(29),
+        rightHeel: p(30),
+        leftFootIndex: p(31),
+        rightFootIndex: p(32)
+      };
+    }
+
+    // =========================================================================
+    // 5. CANVAS SKELETON, ANGLE ARCS & TRAJECTORY RENDERER
+    // =========================================================================
+    function redrawAll() {
+      drawSlotCanvas('A');
+      drawSlotCanvas('B');
+      drawKinematicChart();
+    }
+
+    function drawSlotCanvas(slotId) {
+      const slot = slots[slotId];
+      const canvas = slot.canvasEl;
+      const ctx = slot.ctx;
+      if (!canvas || !ctx) return;
+
+      const W = canvas.width;
+      const H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const isRealVideo = slot.sourceType === 'video' && slot.videoEl && slot.videoEl.readyState >= 2;
+      const frameIdx = Math.max(0, Math.min((slot.frames?.length || 1) - 1, slot.currentFrameIdx));
+      let frame = slot.frames ? slot.frames[frameIdx] : null;
+
+      // For real video before batch scan, use real-time liveKeypoints frame if available
+      if (isRealVideo && !frame && slot.liveKeypoints) {
+        frame = buildSingleFrameKinematic(
+          slot.liveKeypoints,
+          frameIdx,
+          slot.videoEl.currentTime,
+          slot.baseHipY,
+          slot.baseAnkleY,
+          slot.normToMeters
+        );
+      }
+
+      // 1. Background & Coordinate Projection Box:
+      // When real <video> is displayed underneath, compute exact letterboxed rectangle so skeleton aligns 1:1 with video pixels
+      let box = { x: 0, y: 0, w: W, h: H };
+      if (isRealVideo) {
+        const vw = slot.videoEl.videoWidth || W;
+        const vh = slot.videoEl.videoHeight || H;
+        const vidRatio = vw / vh;
+        const canRatio = W / H;
+        if (vidRatio > canRatio) {
+          box.w = W;
+          box.h = W / vidRatio;
+          box.x = 0;
+          box.y = (H - box.h) / 2;
+        } else {
+          box.h = H;
+          box.w = H * vidRatio;
+          box.x = (W - box.w) / 2;
+          box.y = 0;
+        }
+      } else {
+        drawLabBackground(ctx, W, H, frame?.groundY || 0.86);
+      }
+
+      if (!frame) return;
+
+      const showSkeleton = document.getElementById('layerSkeleton').checked;
+      const showAngles = document.getElementById('layerAngles').checked;
+      const showCOM = document.getElementById('layerCOM').checked;
+      const showGround = document.getElementById('layerGround').checked;
+      const showValgus = document.getElementById('layerValgus').checked;
+
+      // Apply coordinate transform into the exact video display rectangle
+      ctx.save();
+      ctx.translate(box.x, box.y);
+      const VW = box.w;
+      const VH = box.h;
+
+      // 2. Ground Reference Line & Peak Height Ruler
+      if (showGround) {
+        drawGroundAndHeightRuler(ctx, VW, VH, slot, frame, isRealVideo);
+      }
+
+      // 3. Center of Mass (COM) Trajectory Curve
+      if (showCOM && (slot.sourceType === 'demo' || slot.isBatchAnalyzed)) {
+        drawCOMTrajectory(ctx, VW, VH, slot, frameIdx);
+      }
+
+      // 4. Frontal Knee Valgus / Bilateral Symmetry Guide
+      if (showValgus) {
+        drawValgusGuide(ctx, VW, VH, frame.keypoints);
+      }
+
+      // 5. Full Human Skeleton Mesh
+      if (showSkeleton) {
+        drawSkeletonMesh(ctx, VW, VH, frame.keypoints, slotId);
+      }
+
+      // 6. Live Joint Angle Arcs & Smart Non-Overlapping Callouts
+      if (showAngles) {
+        drawJointAngleAnnotations(ctx, VW, VH, frame);
+      }
+
+      ctx.restore();
+
+      // 7. Update HUD & Scrubber UI
+      updateSlotHUD(slotId, frame);
+    }
+
+    function drawLabBackground(ctx, W, H, groundNormY) {
+      // Subtle Biomechanical Grid
+      ctx.save();
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+      ctx.lineWidth = 1;
+      const step = Math.max(28, Math.round(W / 16));
+      for (let x = step; x < W; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+      }
+      for (let y = step; y < H; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+      }
+
+      // Force-plate floor zone
+      const gy = groundNormY * H;
+      const grad = ctx.createLinearGradient(0, gy, 0, H);
+      grad.addColorStop(0, 'rgba(18, 77, 58, 0.45)');
+      grad.addColorStop(1, 'rgba(9, 13, 22, 0.95)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, gy, W, H - gy);
+      ctx.restore();
+    }
+
+    function drawGroundAndHeightRuler(ctx, W, H, slot, frame, isRealVideo = false) {
+      const gy = (frame.groundY || 0.86) * H;
+      ctx.save();
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath();
+      ctx.moveTo(W * 0.08, gy);
+      ctx.lineTo(W * 0.92, gy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Ground Label
+      ctx.fillStyle = '#ef4444';
+      ctx.font = `bold ${Math.max(11, Math.round(W * 0.018))}px Inter, sans-serif`;
+      ctx.fillText('GROUND 地面基準線', W * 0.09, gy - 6);
+
+      // Peak Height Marker on Right Side (only when full jump curve is analyzed)
+      if (!isRealVideo || slot.isBatchAnalyzed) {
+        const peakFrame = slot.frames[slot.events.peakFlight];
+        const standFrame = slot.frames[0];
+        if (peakFrame && standFrame && slot.metrics?.jumpHeightFT) {
+          const peakHipY = peakFrame.midHip.y * H;
+          const standHipY = standFrame.midHip.y * H;
+
+          // Standing Hip Reference
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(W * 0.72, standHipY);
+          ctx.lineTo(W * 0.92, standHipY);
+          ctx.stroke();
+
+          // Peak Jump Hip Line
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(W * 0.72, peakHipY);
+          ctx.lineTo(W * 0.92, peakHipY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Vertical arrow between Standing Hip and Peak Hip
+          const rx = W * 0.88;
+          ctx.beginPath();
+          ctx.moveTo(rx, standHipY);
+          ctx.lineTo(rx, peakHipY);
+          ctx.stroke();
+
+          ctx.fillStyle = '#10b981';
+          ctx.font = `bold ${Math.max(11, Math.round(W * 0.019))}px monospace`;
+          ctx.fillText(`JH: ${slot.metrics.jumpHeightFT.toFixed(1)}cm`, W * 0.73, peakHipY - 7);
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawCOMTrajectory(ctx, W, H, slot, currentIdx) {
+      ctx.save();
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (let i = 1; i <= currentIdx; i++) {
+        const prev = slot.frames[i - 1];
+        const curr = slot.frames[i];
+        if (!prev || !curr || !prev.midHip || !curr.midHip) continue;
+        ctx.strokeStyle = curr.phaseCode === 'flight' ? '#06b6d4' : (curr.comY_cm < 0 ? '#f59e0b' : '#10b981');
+        ctx.beginPath();
+        ctx.moveTo(prev.midHip.x * W, prev.midHip.y * H);
+        ctx.lineTo(curr.midHip.x * W, curr.midHip.y * H);
+        ctx.stroke();
+      }
+
+      const curr = slot.frames[currentIdx];
+      if (!curr || !curr.midHip) {
+        ctx.restore();
+        return;
+      }
+      const cx = curr.midHip.x * W;
+      const cy = curr.midHip.y * H;
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(6, W * 0.011), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawValgusGuide(ctx, W, H, kp) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(168, 85, 247, 0.75)';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 4]);
+      [
+        [kp.leftHip, kp.leftAnkle],
+        [kp.rightHip, kp.rightAnkle]
+      ].forEach(([hip, ankle]) => {
+        if (!hip || !ankle) return;
+        ctx.beginPath();
+        ctx.moveTo(hip.x * W, hip.y * H);
+        ctx.lineTo(ankle.x * W, ankle.y * H);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    function drawSkeletonMesh(ctx, W, H, kp, slotId) {
+      ctx.save();
+      const rightColor = slotId === 'A' ? '#06b6d4' : '#38bdf8';
+      const leftColor = '#a78bfa';
+
+      const connections = [
+        // Left side limbs
+        [kp.leftShoulder, kp.leftElbow, leftColor, 3.5],
+        [kp.leftElbow, kp.leftWrist, leftColor, 3.5],
+        [kp.leftHip, kp.leftKnee, leftColor, 4],
+        [kp.leftKnee, kp.leftAnkle, leftColor, 4],
+        [kp.leftAnkle, kp.leftHeel, leftColor, 3],
+        [kp.leftHeel, kp.leftFootIndex, leftColor, 3],
+        [kp.leftAnkle, kp.leftFootIndex, leftColor, 3],
+        // Torso & Pelvis
+        [kp.leftShoulder, kp.rightShoulder, '#10b981', 3.5],
+        [kp.leftHip, kp.rightHip, '#10b981', 3.5],
+        [kp.leftShoulder, kp.leftHip, '#10b981', 4],
+        [kp.rightShoulder, kp.rightHip, '#10b981', 4.5],
+        // Right side limbs
+        [kp.rightShoulder, kp.rightElbow, rightColor, 4],
+        [kp.rightElbow, kp.rightWrist, rightColor, 4],
+        [kp.rightHip, kp.rightKnee, rightColor, 5],
+        [kp.rightKnee, kp.rightAnkle, rightColor, 5],
+        [kp.rightAnkle, kp.rightHeel, rightColor, 3.5],
+        [kp.rightHeel, kp.rightFootIndex, rightColor, 3.5],
+        [kp.rightAnkle, kp.rightFootIndex, rightColor, 3.5]
+      ];
+
+      ctx.lineCap = 'round';
+      connections.forEach(([p1, p2, color, width]) => {
+        if (!p1 || !p2) return;
+        // Dark outline for high visibility over any bright video background
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
+        ctx.lineWidth = width + 2.5;
+        ctx.beginPath();
+        ctx.moveTo(p1.x * W, p1.y * H);
+        ctx.lineTo(p2.x * W, p2.y * H);
+        ctx.stroke();
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(p1.x * W, p1.y * H);
+        ctx.lineTo(p2.x * W, p2.y * H);
+        ctx.stroke();
+      });
+
+      // Head ring centered on nose/head
+      const headRadius = Math.max(11, W * 0.024);
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(kp.nose.x * W, kp.nose.y * H, headRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Bilateral Joint Nodes
+      const joints = [
+        kp.leftShoulder, kp.leftElbow, kp.leftWrist, kp.leftHip, kp.leftKnee, kp.leftAnkle, kp.leftFootIndex,
+        kp.rightShoulder, kp.rightElbow, kp.rightWrist, kp.rightHip, kp.rightKnee, kp.rightAnkle, kp.rightFootIndex
+      ];
+      joints.forEach(j => {
+        if (!j) return;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(j.x * W, j.y * H, Math.max(4.5, W * 0.008), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+
+      ctx.restore();
+    }
+
+    /**
+     * Draws translucent angle sector wedges + smart non-overlapping callout pills at joints
+     */
+    function drawJointAngleAnnotations(ctx, W, H, frame) {
+      ctx.save();
+      const kp = frame.keypoints;
+      const fontSize = Math.max(11, Math.round(W * 0.019));
+      ctx.font = `bold ${fontSize}px monospace`;
+
+      const showKnee = document.getElementById('angFilterKnee')?.checked ?? true;
+      const showHip = document.getElementById('angFilterHip')?.checked ?? true;
+      const showAnkle = document.getElementById('angFilterAnkle')?.checked ?? true;
+      const showTrunk = document.getElementById('angFilterTrunk')?.checked ?? true;
+
+      let sides = ['right'];
+      if (angleSideMode === 'left') sides = ['left'];
+      else if (angleSideMode === 'both') sides = ['left', 'right'];
+      else {
+        const rScore = (kp.rightKnee.score || 0) + (kp.rightHip.score || 0);
+        const lScore = (kp.leftKnee.score || 0) + (kp.leftHip.score || 0);
+        sides = lScore > rScore + 0.05 ? ['left'] : ['right'];
+      }
+
+      sides.forEach(side => {
+        const isLeft = side === 'left';
+        const prefix = sides.length > 1 ? (isLeft ? 'L ' : 'R ') : '';
+        const hip = isLeft ? kp.leftHip : kp.rightHip;
+        const knee = isLeft ? kp.leftKnee : kp.rightKnee;
+        const ankle = isLeft ? kp.leftAnkle : kp.rightAnkle;
+        const shoulder = isLeft ? kp.leftShoulder : kp.rightShoulder;
+        const toe = isLeft ? kp.leftFootIndex : kp.rightFootIndex;
+
+        const kneeDeg = isLeft ? (frame.leftKneeAng || frame.kneeAngle) : (frame.rightKneeAng || frame.kneeAngle);
+        const hipDeg = isLeft ? (frame.leftHipAng || frame.hipAngle) : (frame.rightHipAng || frame.hipAngle);
+        const ankleDeg = isLeft ? (frame.leftAnkleAng || frame.ankleAngle) : (frame.rightAnkleAng || frame.ankleAngle);
+
+        // 1. Knee Angle Sector & Pill
+        if (showKnee && hip && knee && ankle) {
+          drawAngleWedgeAndPill(
+            ctx, W, H,
+            hip, knee, ankle,
+            `${prefix}膝 ${Math.round(kneeDeg)}°`,
+            '#f59e0b',
+            isLeft ? -16 : 16
+          );
+        }
+
+        // 2. Hip Angle Sector & Pill
+        if (showHip && shoulder && hip && knee) {
+          drawAngleWedgeAndPill(
+            ctx, W, H,
+            shoulder, hip, knee,
+            `${prefix}髖 ${Math.round(hipDeg)}°`,
+            '#06b6d4',
+            isLeft ? -24 : -12
+          );
+        }
+
+        // 3. Ankle Angle Sector & Pill
+        if (showAnkle && knee && ankle && toe) {
+          drawAngleWedgeAndPill(
+            ctx, W, H,
+            knee, ankle, toe,
+            `${prefix}踝 ${Math.round(ankleDeg)}°`,
+            '#c084fc',
+            isLeft ? -16 : 16
+          );
+        }
+      });
+
+      // 4. Trunk Lean relative to vertical plumb line at shoulder/hip
+      if (showTrunk && kp.rightShoulder && kp.rightHip) {
+        const sx = frame.midShoulder.x * W;
+        const sy = frame.midShoulder.y * H;
+        const hx = frame.midHip.x * W;
+        const hy = frame.midHip.y * H;
+
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.65)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx, sy - 10);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        drawAngleTag(ctx, sx + 14, sy - 8, `前傾 ${Math.round(frame.trunkLean)}°`, '#10b981');
+      }
+
+      ctx.restore();
+    }
+
+    function drawAngleWedgeAndPill(ctx, W, H, pA, pB, pC, label, color, extraYOffset = 0) {
+      const bx = pB.x * W;
+      const by = pB.y * H;
+      const ang1 = Math.atan2(pA.y * H - by, pA.x * W - bx);
+      const ang2 = Math.atan2(pC.y * H - by, pC.x * W - bx);
+
+      let diff = ang2 - ang1;
+      while (diff <= -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+
+      const radius = Math.max(18, W * 0.036);
+      ctx.save();
+      ctx.fillStyle = color + '38';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.arc(bx, by, radius, ang1, ang1 + diff, diff < 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      const bisector = ang1 + diff / 2;
+      const outDirX = -Math.cos(bisector);
+      const outDirY = -Math.sin(bisector);
+      const dist = radius + 16;
+      const pillX = Math.max(8, Math.min(W - 88, bx + outDirX * dist - 26));
+      const pillY = Math.max(22, Math.min(H - 8, by + outDirY * dist + extraYOffset * 0.35));
+
+      drawAngleTag(ctx, pillX, pillY, label, color);
+    }
+
+    function drawAngleTag(ctx, x, y, text, accentColor) {
+      const metrics = ctx.measureText(text);
+      const padX = 6;
+      const boxW = metrics.width + padX * 2;
+      const boxH = 20;
+      const bx = Math.min(x, ctx.canvas.width - boxW - 6);
+      const by = Math.max(boxH + 4, y);
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.beginPath();
+      ctx.roundRect(bx, by - boxH + 4, boxW, boxH, 6);
+      ctx.fill();
+
+      ctx.strokeStyle = accentColor;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.fillStyle = accentColor;
+      ctx.fillText(text, bx + padX, by);
+    }
+
+    function updateSlotHUD(slotId, frame) {
+      document.getElementById(`hudKnee-${slotId}`).textContent = `${Math.round(frame.kneeAngle)}°`;
+      document.getElementById(`hudHip-${slotId}`).textContent = `${Math.round(frame.hipAngle)}°`;
+      const ankleEl = document.getElementById(`hudAnkle-${slotId}`);
+      if (ankleEl) ankleEl.textContent = `${Math.round(frame.ankleAngle || 112)}°`;
+      document.getElementById(`hudTrunk-${slotId}`).textContent = `${Math.round(frame.trunkLean)}°`;
+      const sign = frame.comY_cm >= 0 ? '+' : '';
+      document.getElementById(`hudHeight-${slotId}`).textContent = `${sign}${frame.comY_cm.toFixed(1)} cm`;
+
+      document.getElementById(`phaseBadge-${slotId}`).textContent = frame.phase;
+      document.getElementById(`timeDisplay-${slotId}`).textContent = `${frame.time.toFixed(3)}s (F${frame.frameIdx})`;
+
+      const scrubber = document.getElementById(`scrubber-${slotId}`);
+      if (scrubber) {
+        scrubber.max = Math.max(0, slots[slotId].frames.length - 1);
+        scrubber.value = frame.frameIdx;
+      }
+    }
+
+    function setupScrubberAndPhaseBar(slotId) {
+      const slot = slots[slotId];
+      const n = slot.frames.length;
+      const bar = document.getElementById(`phaseBar-${slotId}`);
+      if (!bar || n === 0) return;
+
+      const ev = slot.events;
+      const segs = [
+        { len: ev.startUnweight, color: 'bg-slate-400', title: '站立準備期' },
+        { len: Math.max(1, ev.lowestPoint - ev.startUnweight), color: 'bg-amber-400', title: '離心下蹲期' },
+        { len: Math.max(1, ev.takeoff - ev.lowestPoint), color: 'bg-emerald-500', title: '向心推蹬期' },
+        { len: Math.max(1, ev.landing - ev.takeoff), color: 'bg-cyan-500', title: '騰空飛行期' },
+        { len: Math.max(1, n - ev.landing), color: 'bg-purple-400', title: '落地緩衝期' }
+      ];
+
+      bar.innerHTML = segs
+        .map(s => `<div style="width:${(s.len / n) * 100}%" class="${s.color} h-full" title="${s.title}"></div>`)
+        .join('');
+    }
+
+    // =========================================================================
+    // 6. PLAYBACK, TIMELINE SCRUBBING & ALIGNMENT CONTROLS
+    // =========================================================================
+    function seekSlot(slotId, val) {
+      const slot = slots[slotId];
+      slot.isPlaying = false;
+      isSyncPlaying = false;
+      updatePlayButtons();
+      const idx = Math.max(0, Math.min(slot.frames.length - 1, parseInt(val)));
+      slot.currentFrameIdx = idx;
+
+      if (slot.sourceType === 'video' && slot.videoEl) {
+        slot.videoEl.pause();
+        const targetTime = slot.frames[idx]?.time ?? (idx / slot.fps);
+        slot.videoEl.currentTime = Math.min(slot.videoEl.duration || targetTime, targetTime);
+      }
+      redrawAll();
+    }
+
+    function stepFrameSlot(slotId, delta) {
+      const slot = slots[slotId];
+      slot.isPlaying = false;
+      isSyncPlaying = false;
+      updatePlayButtons();
+      const nextIdx = (slot.currentFrameIdx + delta + slot.frames.length) % slot.frames.length;
+      slot.currentFrameIdx = nextIdx;
+
+      if (slot.sourceType === 'video' && slot.videoEl) {
+        slot.videoEl.pause();
+        const targetTime = slot.frames[nextIdx]?.time ?? (nextIdx / slot.fps);
+        slot.videoEl.currentTime = Math.min(slot.videoEl.duration || targetTime, targetTime);
+      }
+      redrawAll();
+    }
+
+    function stepBothFrames(delta) {
+      isSyncPlaying = false;
+      slots.A.isPlaying = false;
+      slots.B.isPlaying = false;
+      updatePlayButtons();
+      ['A', 'B'].forEach(id => {
+        const slot = slots[id];
+        if (!slot.frames.length) return;
+        const nextIdx = (slot.currentFrameIdx + delta + slot.frames.length) % slot.frames.length;
+        slot.currentFrameIdx = nextIdx;
+        if (slot.sourceType === 'video' && slot.videoEl) {
+          slot.videoEl.pause();
+          const targetTime = slot.frames[nextIdx]?.time ?? (nextIdx / slot.fps);
+          slot.videoEl.currentTime = Math.min(slot.videoEl.duration || targetTime, targetTime);
+        }
+      });
+      redrawAll();
+    }
+
+    function togglePlaySlot(slotId) {
+      const slot = slots[slotId];
+      slot.isPlaying = !slot.isPlaying;
+      if (!slot.isPlaying) isSyncPlaying = false;
+
+      if (slot.sourceType === 'video' && slot.videoEl) {
+        if (slot.isPlaying) {
+          slot.videoEl.playbackRate = Math.max(0.1, globalSpeed);
+          slot.videoEl.play().catch(() => {});
+        } else {
+          slot.videoEl.pause();
+        }
+      }
+      updatePlayButtons();
+    }
+
+    function toggleSyncPlay() {
+      isSyncPlaying = !isSyncPlaying;
+      ['A', 'B'].forEach(id => {
+        const slot = slots[id];
+        slot.isPlaying = isSyncPlaying;
+        if (slot.sourceType === 'video' && slot.videoEl) {
+          if (isSyncPlaying) {
+            slot.videoEl.playbackRate = Math.max(0.1, globalSpeed);
+            slot.videoEl.play().catch(() => {});
+          } else {
+            slot.videoEl.pause();
+          }
+        }
+      });
+      updatePlayButtons();
+    }
+
+    function setGlobalSpeed(speed) {
+      globalSpeed = speed;
+      ['A', 'B'].forEach(id => {
+        if (slots[id].sourceType === 'video' && slots[id].videoEl) {
+          slots[id].videoEl.playbackRate = Math.max(0.1, speed);
+        }
+      });
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        if (btn.textContent.trim() === `${speed}x`) {
+          btn.className = 'speed-btn px-2 py-1 rounded-lg text-xs font-bold bg-white text-[#124d3a] shadow-sm';
+        } else {
+          btn.className = 'speed-btn px-2 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-white';
+        }
+      });
+    }
+
+    function updatePlayButtons() {
+      ['A', 'B'].forEach(id => {
+        const btn = document.getElementById(`playBtn-${id}`);
+        if (btn) btn.textContent = slots[id].isPlaying ? '暫停' : '播放';
+      });
+      const syncText = document.getElementById('syncPlayText');
+      if (syncText) {
+        syncText.textContent = isSyncPlaying ? '暫停同步播放' : '雙影片同步播放';
+      }
+    }
+
+    function alignByEvent(eventKey) {
+      isSyncPlaying = false;
+      slots.A.isPlaying = false;
+      slots.B.isPlaying = false;
+      updatePlayButtons();
+
+      const labelMap = {
+        startUnweight: { label: '開始下蹲瞬間', prop: 'startUnweight' },
+        lowestPoint: { label: '最低下蹲轉換點', prop: 'lowestPoint' },
+        takeoff: { label: '起跳離地瞬間', prop: 'takeoff' },
+        peakFlight: { label: '騰空最高點', prop: 'peakFlight' },
+        landing: { label: '落地觸地瞬間', prop: 'landing' }
+      };
+      const cfg = labelMap[eventKey] || labelMap.lowestPoint;
+      slots.A.currentFrameIdx = slots.A.events[cfg.prop] || 0;
+      slots.B.currentFrameIdx = slots.B.events[cfg.prop] || 0;
+      ['A', 'B'].forEach(id => {
+        const slot = slots[id];
+        if (slot.sourceType === 'video' && slot.videoEl) {
+          slot.videoEl.pause();
+          const targetTime = slot.frames[slot.currentFrameIdx]?.time ?? (slot.currentFrameIdx / slot.fps);
+          slot.videoEl.currentTime = Math.min(slot.videoEl.duration || targetTime, targetTime);
+        }
+      });
+      redrawAll();
+      showToast(`已將雙影片精準對齊至：${cfg.label}`, 'success');
+    }
+
+    function mainAnimationLoop(timestamp) {
+      if (!lastAnimTimestamp) lastAnimTimestamp = timestamp;
+      const dtSec = (timestamp - lastAnimTimestamp) / 1000;
+      lastAnimTimestamp = timestamp;
+
+      let needsRedraw = false;
+      ['A', 'B'].forEach(id => {
+        const slot = slots[id];
+        if (slot.sourceType === 'video') {
+          if (slot.isPlaying && slot.videoEl && !slot.videoEl.paused) {
+            const idx = Math.min(
+              Math.max(0, slot.frames.length - 1),
+              Math.round(slot.videoEl.currentTime * slot.fps)
+            );
+            slot.currentFrameIdx = idx;
+            if (!slot.isBatchAnalyzed) {
+              detectSingleFrameForVideo(id);
+            }
+            needsRedraw = true;
+          }
+        } else if (slot.isPlaying && slot.frames.length > 0) {
+          slot.playAccumulator += dtSec * globalSpeed;
+          const frameDuration = 1 / slot.fps;
+          if (slot.playAccumulator >= frameDuration) {
+            const advance = Math.floor(slot.playAccumulator / frameDuration);
+            slot.playAccumulator %= frameDuration;
+            slot.currentFrameIdx = (slot.currentFrameIdx + advance) % slot.frames.length;
+            needsRedraw = true;
+          }
+        }
+      });
+
+      if (needsRedraw) {
+        redrawAll();
+      }
+      requestAnimationFrame(mainAnimationLoop);
+    }
+
+    // =========================================================================
+    // 7. ANALYTICS TABLE, CHARTS & COACHING INSIGHTS
+    // =========================================================================
+    function updateSlotCalibration(slotId) {
+      const slot = slots[slotId];
+      slot.fps = parseInt(document.getElementById(`fps-${slotId}`).value) || 60;
+      slot.subjectHeightCm = parseFloat(document.getElementById(`height-${slotId}`).value) || 175;
+
+      const analyzed = computeKinematicsFromFrames(slot.frames, slot.fps, slot.subjectHeightCm);
+      slot.frames = analyzed.frames;
+      slot.events = analyzed.events;
+      slot.metrics = analyzed.metrics;
+
+      setupScrubberAndPhaseBar(slotId);
+      updateAllAnalyticsUI();
+      redrawAll();
+    }
+
+    function recalculateAllMetrics() {
+      updateSlotCalibration('A');
+      updateSlotCalibration('B');
+      updateProtocolLabels();
+      showToast(`已切換跳躍協定為：${document.getElementById('jumpProtocolSelect').value}`, 'info');
+    }
+
+    function updateProtocolLabels() {
+      const protocol = document.getElementById('jumpProtocolSelect')?.value || 'CMJ';
+      ['headerProtocolLabel', 'metricsProtocolLabel', 'webcamReportProtocol'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = protocol;
+      });
+    }
+
+    function updateAllAnalyticsUI() {
+      renderMetricsTable();
+      renderEventCards();
+      renderCoachingInsights();
+      drawKinematicChart();
+    }
+
+    function renderMetricsTable() {
+      const mA = slots.A.metrics;
+      const mB = slots.B.metrics;
+      if (!mA || !mB || mA.jumpHeightFT === undefined || mB.jumpHeightFT === undefined) return;
+
+      const rows = [
+        { name: '跳躍高度 (騰空時間法 JH-FT)', unit: 'cm', a: mA.jumpHeightFT, b: mB.jumpHeightFT, dec: 1, higherBetter: true },
+        { name: '質心最大上升高度 (JH-COM)', unit: 'cm', a: mA.jumpHeightCOM, b: mB.jumpHeightCOM, dec: 1, higherBetter: true },
+        { name: '騰空時間 (Flight Time)', unit: 'ms', a: mA.flightTimeMs, b: mB.flightTimeMs, dec: 0, higherBetter: true },
+        { name: '發力收縮總時間 (Contraction Time)', unit: 'ms', a: mA.contractionTimeMs, b: mB.contractionTimeMs, dec: 0, higherBetter: false },
+        { name: '反應肌力指數 (RSImod)', unit: 'm/s', a: mA.rsiMod, b: mB.rsiMod, dec: 2, higherBetter: true },
+        { name: '離心下蹲深度 (Countermovement Depth)', unit: 'cm', a: mA.eccentricDepthCm, b: mB.eccentricDepthCm, dec: 1, higherBetter: null },
+        { name: '最低點膝關節角度 (Min Knee Angle)', unit: '°', a: mA.minKneeAngle, b: mB.minKneeAngle, dec: 0, higherBetter: null },
+        { name: '最低點髖關節角度 (Min Hip Angle)', unit: '°', a: mA.minHipAngle, b: mB.minHipAngle, dec: 0, higherBetter: null },
+        { name: '落地緩衝最低質心位移 (Landing Buffer)', unit: 'cm', a: mA.landingBufferDepthCm, b: mB.landingBufferDepthCm, dec: 1, higherBetter: false },
+        { name: '雙側下肢對稱性 (Symmetry Index)', unit: '%', a: mA.symmetryPct, b: mB.symmetryPct, dec: 1, higherBetter: true }
+      ];
+
+      const tbody = document.getElementById('metricsTableBody');
+      tbody.innerHTML = rows.map(r => {
+        const diff = r.b - r.a;
+        const pct = r.a !== 0 ? (diff / Math.abs(r.a)) * 100 : 0;
+        const sign = diff > 0 ? '+' : '';
+        let badgeClass = 'bg-slate-100 text-slate-700';
+
+        if (r.higherBetter === true && Math.abs(pct) >= 1) {
+          badgeClass = diff > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800';
+        } else if (r.higherBetter === false && Math.abs(pct) >= 1) {
+          badgeClass = diff < 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
+        }
+
+        return `
+          <tr class="hover:bg-slate-50/90 transition">
+            <td class="py-2.5 px-4 font-semibold text-slate-800">${r.name}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-[#124d3a]">${r.a.toFixed(r.dec)} <span class="text-[11px] font-normal text-slate-400">${r.unit}</span></td>
+            <td class="py-2.5 px-3 text-right font-mono font-bold text-cyan-700">${r.b.toFixed(r.dec)} <span class="text-[11px] font-normal text-slate-400">${r.unit}</span></td>
+            <td class="py-2.5 px-4 text-right font-mono">
+              <span class="px-2 py-0.5 rounded-md text-xs font-bold ${badgeClass}">
+                ${sign}${diff.toFixed(r.dec)} (${sign}${pct.toFixed(1)}%)
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderCoachingInsights() {
+      const mA = slots.A.metrics;
+      const mB = slots.B.metrics;
+      if (!mA || !mB || mA.jumpHeightFT === undefined || mB.jumpHeightFT === undefined) return;
+
+      const jhDiff = mB.jumpHeightFT - mA.jumpHeightFT;
+      const rsiDiff = mB.rsiMod - mA.rsiMod;
+      const ctDiff = mB.contractionTimeMs - mA.contractionTimeMs;
+
+      const comments = [];
+      if (jhDiff > 1.0) {
+        comments.push(`影片 B 跳躍高度較影片 A 提升 <strong>+${jhDiff.toFixed(1)} cm</strong>，顯示下肢三關節伸展推蹬功率顯著增強。`);
+      } else if (jhDiff < -1.0) {
+        comments.push(`影片 B 跳躍高度較影片 A 下降 <strong>${jhDiff.toFixed(1)} cm</strong>，建議檢視離心制動轉換速度或疲勞累積狀況。`);
+      } else {
+        comments.push(`兩次試跳高度表現接近（差異 ${jhDiff.toFixed(1)} cm），動作穩定性良好。`);
+      }
+
+      if (rsiDiff > 0.03) {
+        comments.push(`反應肌力指數 RSImod 進步 <strong>+${rsiDiff.toFixed(2)} m/s</strong>（收縮時間變化 ${ctDiff.toFixed(0)} ms），代表牽張縮短循環 (SSC) 轉換效率更佳。`);
+      }
+
+      if (mB.maxTrunkLean > 28) {
+        comments.push(`注意：最低點軀幹前傾達 ${mB.maxTrunkLean.toFixed(0)}°，建議強化核心抗屈曲穩定度以減少能量散失。`);
+      }
+
+      document.getElementById('coachingInsightText').innerHTML = comments.join(' ');
+    }
+
+    function renderEventCards() {
+      const evA = slots.A.events;
+      const evB = slots.B.events;
+      const cards = [
+        { key: 'startUnweight', title: '1. 開始下蹲', desc: 'Unweighting', color: 'border-slate-300 bg-slate-50' },
+        { key: 'lowestPoint', title: '2. 最低轉換點', desc: 'Lowest COM', color: 'border-amber-300 bg-amber-50/70' },
+        { key: 'takeoff', title: '3. 起跳離地', desc: 'Takeoff', color: 'border-emerald-300 bg-emerald-50/70' },
+        { key: 'peakFlight', title: '4. 騰空最高點', desc: 'Apex Height', color: 'border-cyan-300 bg-cyan-50/70' },
+        { key: 'landing', title: '5. 首次觸地', desc: 'Initial Contact', color: 'border-purple-300 bg-purple-50/70' },
+        { key: 'landingBufferLowest', title: '6. 緩衝最低點', desc: 'Landing Buffer', color: 'border-rose-300 bg-rose-50/70' },
+        { key: 'endRecovery', title: '7. 恢復站立', desc: 'Recovery', color: 'border-sky-300 bg-sky-50/70' }
+      ];
+
+      const grid = document.getElementById('eventCardsGrid');
+      grid.innerHTML = cards.map(c => {
+        const fA = slots.A.frames[evA[c.key]];
+        const fB = slots.B.frames[evB[c.key]];
+        const tA = fA ? fA.time.toFixed(2) + 's' : '--';
+        const tB = fB ? fB.time.toFixed(2) + 's' : '--';
+        const kA = fA ? Math.round(fA.kneeAngle) + '°' : '--';
+        const kB = fB ? Math.round(fB.kneeAngle) + '°' : '--';
+
+        return `
+          <button onclick="alignByEvent('${c.key}')" class="text-left p-3 rounded-xl border ${c.color} hover:shadow-md transition flex flex-col justify-between gap-1.5">
+            <div>
+              <div class="font-extrabold text-xs text-slate-800">${c.title}</div>
+              <div class="text-[10px] font-semibold text-slate-500 uppercase">${c.desc}</div>
+            </div>
+            <div class="pt-1 border-t border-black/5 text-[11px] font-mono space-y-0.5">
+              <div class="flex justify-between text-[#124d3a]"><span>A: ${tA}</span><span>膝 ${kA}</span></div>
+              <div class="flex justify-between text-cyan-700"><span>B: ${tB}</span><span>膝 ${kB}</span></div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function setChartMetric(metric) {
+      chartMetric = metric;
+      document.querySelectorAll('.chart-tab').forEach(btn => {
+        btn.className = 'chart-tab px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900';
+      });
+      const active = document.getElementById(`chartTab-${metric}`);
+      if (active) {
+        active.className = 'chart-tab px-2.5 py-1 rounded-md bg-white text-[#124d3a] shadow-sm';
+      }
+      drawKinematicChart();
+    }
+
+    function drawKinematicChart() {
+      const canvas = document.getElementById('kinematicChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width;
+      const H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const framesA = slots.A.frames.filter(Boolean);
+      const framesB = appMode === 'dual' ? slots.B.frames.filter(Boolean) : [];
+      if (framesA.length === 0) return;
+
+      const metricConfigs = {
+        comY: { prop: 'comY_cm', label: '質心高度 (cm)', zeroLine: true },
+        velY: { prop: 'velY_ms', label: '垂直速度 (m/s)', zeroLine: true },
+        kneeAngle: { prop: 'kneeAngle', label: '膝關節角度 (°)', zeroLine: false },
+        hipAngle: { prop: 'hipAngle', label: '髖關節角度 (°)', zeroLine: false }
+      };
+      const cfg = metricConfigs[chartMetric];
+
+      // Determine axis bounds
+      const allVals = [...framesA.map(f => f[cfg.prop]), ...framesB.map(f => f[cfg.prop])];
+      let minVal = Math.min(...allVals);
+      let maxVal = Math.max(...allVals);
+      const padVal = Math.max(2, (maxVal - minVal) * 0.14);
+      minVal -= padVal;
+      maxVal += padVal;
+
+      const maxTime = Math.max(
+        framesA[framesA.length - 1].time,
+        framesB.length ? framesB[framesB.length - 1].time : 0,
+        0.5
+      );
+
+      const padLeft = 46;
+      const padRight = 16;
+      const padTop = 18;
+      const padBottom = 26;
+      const plotW = W - padLeft - padRight;
+      const plotH = H - padTop - padBottom;
+
+      const toX = (t) => padLeft + (t / maxTime) * plotW;
+      const toY = (v) => padTop + (1 - (v - minVal) / (maxVal - minVal)) * plotH;
+
+      // Grid lines & Y labels
+      ctx.save();
+      ctx.font = `600 ${Math.max(10, Math.round(W * 0.022))}px monospace`;
+      ctx.fillStyle = '#64748b';
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+
+      const ticks = 4;
+      for (let i = 0; i <= ticks; i++) {
+        const v = minVal + ((maxVal - minVal) * i) / ticks;
+        const y = toY(v);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(W - padRight, y);
+        ctx.stroke();
+        ctx.fillText(v.toFixed(chartMetric === 'velY' ? 1 : 0), 6, y + 4);
+      }
+
+      // Zero baseline if applicable
+      if (cfg.zeroLine && minVal < 0 && maxVal > 0) {
+        const y0 = toY(0);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y0);
+        ctx.lineTo(W - padRight, y0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Plot Curve A
+      plotSeries(ctx, framesA, cfg.prop, toX, toY, '#124d3a', 3);
+
+      // Plot Curve B
+      if (framesB.length > 0) {
+        plotSeries(ctx, framesB, cfg.prop, toX, toY, '#0891b2', 3);
+      }
+
+      // Draw Playhead Cursors
+      const curA = slots.A.frames[slots.A.currentFrameIdx];
+      if (curA) {
+        drawPlayheadMarker(ctx, toX(curA.time), toY(curA[cfg.prop]), padTop, padTop + plotH, '#124d3a');
+      }
+      if (framesB.length > 0) {
+        const curB = slots.B.frames[slots.B.currentFrameIdx];
+        if (curB) {
+          drawPlayheadMarker(ctx, toX(curB.time), toY(curB[cfg.prop]), padTop, padTop + plotH, '#0891b2');
+        }
+      }
+
+      ctx.restore();
+
+      // Store click-to-seek coordinate mapping
+      canvas._chartMap = { padLeft, plotW, maxTime };
+    }
+
+    function plotSeries(ctx, frames, prop, toX, toY, color, width) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      frames.forEach((f, idx) => {
+        const x = toX(f.time);
+        const y = toY(f[prop]);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    function drawPlayheadMarker(ctx, x, y, topY, botY, color) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, topY);
+      ctx.lineTo(x, botY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Click on kinematic chart to seek both videos
+    document.getElementById('kinematicChart').addEventListener('click', (e) => {
+      const canvas = e.currentTarget;
+      if (!canvas._chartMap) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const clickX = (e.clientX - rect.left) * scaleX;
+      const { padLeft, plotW, maxTime } = canvas._chartMap;
+      const ratio = Math.max(0, Math.min(1, (clickX - padLeft) / plotW));
+      const targetTime = ratio * maxTime;
+
+      ['A', 'B'].forEach(id => {
+        const slot = slots[id];
+        if (!slot.frames.length) return;
+        let closestIdx = 0;
+        let minDiff = Infinity;
+        slot.frames.forEach((f, idx) => {
+          const fTime = f ? f.time : idx / slot.fps;
+          const diff = Math.abs(fTime - targetTime);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestIdx = idx;
+          }
+        });
+        slot.currentFrameIdx = closestIdx;
+        if (slot.sourceType === 'video' && slot.videoEl) {
+          slot.videoEl.pause();
+          const seekT = slot.frames[closestIdx]?.time ?? (closestIdx / slot.fps);
+          slot.videoEl.currentTime = Math.min(slot.videoEl.duration || seekT, seekT);
+        }
+      });
+      redrawAll();
+    });
+
+    // =========================================================================
+    // 8. VIEW MODES & LIVE WEBCAM TRACKING
+    // =========================================================================
+    function setAppMode(mode) {
+      appMode = mode;
+      document.querySelectorAll('.mode-tab').forEach(btn => {
+        btn.className = 'mode-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-white/80 hover:text-white transition';
+      });
+      const activeBtn = document.getElementById(`modeBtn-${mode}`);
+      if (activeBtn) {
+        activeBtn.className = 'mode-tab px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#124d3a] shadow transition';
+      }
+
+      const webcamSec = document.getElementById('webcamSection');
+      const webcamReportSec = document.getElementById('webcamReportSection');
+      const compSec = document.getElementById('comparisonWorkspace');
+      const cardB = document.getElementById('card-B');
+      const syncBar = document.getElementById('globalSyncBar');
+
+      if (mode === 'webcam') {
+        webcamSec.classList.remove('hidden');
+        webcamReportSec?.classList.remove('hidden');
+        compSec.classList.add('hidden');
+        syncBar.classList.add('hidden');
+      } else {
+        stopWebcam();
+        webcamSec.classList.add('hidden');
+        webcamReportSec?.classList.add('hidden');
+        compSec.classList.remove('hidden');
+        if (mode === 'single') {
+          cardB.classList.add('hidden');
+          compSec.classList.remove('lg:grid-cols-2');
+          compSec.classList.add('grid-cols-1', 'max-w-4xl', 'mx-auto', 'w-full');
+          syncBar.classList.add('hidden');
+        } else {
+          cardB.classList.remove('hidden');
+          compSec.classList.add('lg:grid-cols-2');
+          compSec.classList.remove('max-w-4xl', 'mx-auto', 'w-full');
+          syncBar.classList.remove('hidden');
+        }
+      }
+      setTimeout(resizeAllCanvases, 50);
+    }
+
+    async function startWebcam() {
+      try {
+        const video = document.getElementById('webcamVideo');
+        const canvas = document.getElementById('webcamCanvas');
+        const ctx = canvas.getContext('2d');
+        webcamJumpTracker.phase = 'idle';
+        webcamJumpTracker.baselineAnkleY = null;
+        webcamJumpTracker.baselineHipY = null;
+        webcamJumpTracker.takeoffAt = 0;
+        webcamJumpTracker.landingAt = 0;
+        webcamJumpTracker.peakAnkleY = null;
+        webcamJumpTracker.peakAt = 0;
+        webcamJumpTracker.bufferLowestHipY = null;
+        webcamJumpTracker.bufferLowestAt = 0;
+        webcamJumpTracker.peakHeightCm = 0;
+        webcamJumpTracker.smoothedKeypoints = null;
+        updateLiveJumpReport('等待起跳');
+
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+          audio: false
+        });
+        video.srcObject = webcamStream;
+        await video.play();
+
+        document.getElementById('webcamPlaceholder').classList.add('hidden');
+        document.getElementById('btnStartCam').classList.add('hidden');
+        document.getElementById('btnStopCam').classList.remove('hidden');
+
+        if (mpReady && mpPose) {
+          mpPose.onResults((results) => {
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+            if (results.poseLandmarks) {
+              const kp = smoothWebcamKeypoints(mapMediaPipeToKeypoints(results.poseLandmarks));
+              const kneeAngle = (calculateAngleDeg(kp.leftHip, kp.leftKnee, kp.leftAnkle) + calculateAngleDeg(kp.rightHip, kp.rightKnee, kp.rightAnkle)) / 2;
+              const hipAngle = (calculateAngleDeg(kp.leftShoulder, kp.leftHip, kp.leftKnee) + calculateAngleDeg(kp.rightShoulder, kp.rightHip, kp.rightKnee)) / 2;
+              const ankleAngle = (calculateAngleDeg(kp.leftKnee, kp.leftAnkle, kp.leftFootIndex) + calculateAngleDeg(kp.rightKnee, kp.rightAnkle, kp.rightFootIndex)) / 2;
+              const midAnkleY = (kp.leftAnkle.y + kp.rightAnkle.y) / 2;
+              const midHipY = (kp.leftHip.y + kp.rightHip.y) / 2;
+              const midNoseY = (kp.nose?.y ?? kp.leftShoulder.y);
+              updateWebcamJumpTracker({ ankleY: midAnkleY, hipY: midHipY, noseY: midNoseY, now: performance.now() });
+
+              drawSkeletonMesh(ctx, canvas.width, canvas.height, kp, 'A');
+              drawJointAngleAnnotations(ctx, canvas.width, canvas.height, {
+                keypoints: kp,
+                kneeAngle,
+                hipAngle,
+                ankleAngle,
+                trunkLean: 8,
+                midShoulder: { x: (kp.leftShoulder.x + kp.rightShoulder.x) / 2, y: (kp.leftShoulder.y + kp.rightShoulder.y) / 2 },
+                midHip: { x: (kp.leftHip.x + kp.rightHip.x) / 2, y: (kp.leftHip.y + kp.rightHip.y) / 2 }
+              });
+            }
+          });
+
+          const detectLoop = async () => {
+            if (!webcamStream) return;
+            await mpPose.send({ image: video });
+            webcamAnimId = requestAnimationFrame(detectLoop);
+          };
+          detectLoop();
+        }
+        showToast('即時攝影機 AI 骨架追蹤已啟動', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('無法存取攝影機，請確認瀏覽器權限設定。', 'error');
+      }
+    }
+
+    function stopWebcam() {
+      if (webcamAnimId) {
+        cancelAnimationFrame(webcamAnimId);
+        webcamAnimId = null;
+      }
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(t => t.stop());
+        webcamStream = null;
+      }
+      document.getElementById('webcamPlaceholder').classList.remove('hidden');
+      document.getElementById('btnStartCam').classList.remove('hidden');
+      document.getElementById('btnStopCam').classList.add('hidden');
+    }
+
+    function updateLiveJumpReport(phase, result = null) {
+      const phaseEl = document.getElementById('liveJumpPhase');
+      if (phaseEl) phaseEl.textContent = phase;
+      if (!result) return;
+      document.getElementById('liveJumpHeight').textContent = `${result.jumpHeightCm.toFixed(1)} cm`;
+      document.getElementById('liveFlightTime').textContent = `${result.flightTimeMs.toFixed(0)} ms`;
+      document.getElementById('livePeakHeight').textContent = `${result.peakHeightCm.toFixed(1)} cm`;
+      document.getElementById('liveEventTakeoff').textContent = `${result.takeoffMs.toFixed(0)} ms`;
+      document.getElementById('liveEventPeak').textContent = `${result.peakMs.toFixed(0)} ms`;
+      document.getElementById('liveEventContact').textContent = `${result.contactMs.toFixed(0)} ms`;
+      document.getElementById('liveEventBuffer').textContent = `${result.bufferMs.toFixed(0)} ms`;
+    }
+
+    function smoothWebcamKeypoints(raw) {
+      const previous = webcamJumpTracker.smoothedKeypoints;
+      if (!previous) {
+        webcamJumpTracker.smoothedKeypoints = Object.fromEntries(Object.entries(raw).map(([name, p]) => [name, { ...p }]));
+        return webcamJumpTracker.smoothedKeypoints;
+      }
+      const next = {};
+      Object.entries(raw).forEach(([name, point]) => {
+        const old = previous[name] || point;
+        const score = Number.isFinite(point.score) ? point.score : 0.9;
+        if (score < 0.35 && previous[name]) {
+          next[name] = { ...old, score };
+          return;
+        }
+        const distance = Math.hypot(point.x - old.x, point.y - old.y);
+        const alpha = distance > 0.075 ? 0.62 : (score < 0.55 ? 0.16 : 0.28);
+        next[name] = { ...point, score, x: old.x + (point.x - old.x) * alpha, y: old.y + (point.y - old.y) * alpha };
+      });
+      webcamJumpTracker.smoothedKeypoints = next;
+      return next;
+    }
+
+    function updateWebcamJumpTracker({ ankleY, hipY, noseY, now }) {
+      const t = now / 1000;
+      const tracker = webcamJumpTracker;
+      if (tracker.baselineAnkleY === null) tracker.baselineAnkleY = ankleY;
+      if (tracker.baselineHipY === null) tracker.baselineHipY = hipY;
+      const lift = tracker.baselineAnkleY - ankleY;
+      const bodySpan = Math.max(0.35, Math.abs(ankleY - noseY));
+      const scaleCmPerNorm = 175 / bodySpan;
+
+      if (tracker.phase === 'idle') {
+        tracker.baselineAnkleY = tracker.baselineAnkleY * 0.97 + ankleY * 0.03;
+        tracker.baselineHipY = tracker.baselineHipY * 0.97 + hipY * 0.03;
+        if (lift > 0.045) {
+          tracker.phase = 'airborne';
+          tracker.takeoffAt = t;
+          tracker.peakAnkleY = ankleY;
+          tracker.peakAt = t;
+          tracker.peakHeightCm = Math.max(0, lift * scaleCmPerNorm);
+          updateLiveJumpReport('騰空中');
+        } else {
+          updateLiveJumpReport('等待起跳');
+        }
+        return;
+      }
+
+      if (tracker.phase === 'airborne') {
+        if (ankleY < tracker.peakAnkleY) {
+          tracker.peakAnkleY = ankleY;
+          tracker.peakAt = t;
+        }
+        tracker.peakHeightCm = Math.max(tracker.peakHeightCm, (tracker.baselineAnkleY - tracker.peakAnkleY) * scaleCmPerNorm);
+        updateLiveJumpReport('騰空中');
+      }
+
+      const flightTime = t - tracker.takeoffAt;
+      if (tracker.phase === 'airborne' && flightTime > 0.18 && ankleY >= tracker.baselineAnkleY - 0.018) {
+        tracker.phase = 'landingBuffer';
+        tracker.landingAt = t;
+        tracker.bufferLowestHipY = hipY;
+        tracker.bufferLowestAt = t;
+        updateLiveJumpReport('落地緩衝中');
+        return;
+      }
+
+      if (tracker.phase === 'landingBuffer') {
+        if (hipY > tracker.bufferLowestHipY) {
+          tracker.bufferLowestHipY = hipY;
+          tracker.bufferLowestAt = t;
+        }
+        updateLiveJumpReport('落地緩衝中');
+        if (t - tracker.landingAt > 0.28 && (t - tracker.landingAt > 1.2 || Math.abs(hipY - tracker.bufferLowestHipY) < 0.035)) {
+        const flightTimeMs = flightTime * 1000;
+        const jumpHeightCm = (GRAVITY * Math.pow(flightTime, 2) / 8) * 100;
+        const result = {
+          jumpHeightCm,
+          flightTimeMs,
+          peakHeightCm: tracker.peakHeightCm,
+          takeoffMs: 0,
+          peakMs: (tracker.peakAt - tracker.takeoffAt) * 1000,
+          contactMs: (tracker.landingAt - tracker.takeoffAt) * 1000,
+          bufferMs: (tracker.bufferLowestAt - tracker.takeoffAt) * 1000,
+          timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        };
+        tracker.history.unshift(result);
+        tracker.history = tracker.history.slice(0, 20);
+        recordWebcamTest(result);
+        renderWebcamJumpHistory();
+        updateLiveJumpReport('已完成一次跳躍', result);
+        tracker.phase = 'idle';
+        tracker.baselineAnkleY = ankleY;
+        tracker.baselineHipY = hipY;
+        tracker.peakAnkleY = null;
+        tracker.peakHeightCm = 0;
+        }
+      }
+    }
+
+    function renderWebcamJumpHistory() {
+      const body = document.getElementById('webcamJumpHistoryBody');
+      const count = document.getElementById('webcamJumpCount');
+      if (!body) return;
+      count.textContent = `已記錄 ${webcamJumpTracker.history.length} 次`;
+      if (!webcamJumpTracker.history.length) {
+        body.innerHTML = '<tr><td colspan="7" class="px-3 py-4 text-center text-slate-400">啟動攝影機並完成一次跳躍後，這裡會顯示紀錄</td></tr>';
+        return;
+      }
+      body.innerHTML = webcamJumpTracker.history.map((r, index) => `
+        <tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-3 py-2 font-bold">${webcamJumpTracker.history.length - index}</td><td class="px-3 py-2 text-slate-500">${r.timestamp}</td><td class="px-3 py-2 text-right font-mono font-bold text-rose-700">${r.jumpHeightCm.toFixed(1)} cm</td><td class="px-3 py-2 text-right font-mono">${r.flightTimeMs.toFixed(0)} ms</td><td class="px-3 py-2 text-right font-mono">${r.peakHeightCm.toFixed(1)} cm</td><td class="px-3 py-2 text-right font-mono">${r.contactMs.toFixed(0)} ms</td><td class="px-3 py-2 text-right font-mono">${r.bufferMs.toFixed(0)} ms</td></tr>
+      `).join('');
+    }
+
+    function clearWebcamJumpHistory() {
+      webcamJumpTracker.history = [];
+      renderWebcamJumpHistory();
+      updateLiveJumpReport('等待起跳');
+    }
+
+    // =========================================================================
+    // 9. EXPORT REPORTS & UI HELPERS
+    // =========================================================================
+    function loadTestHistory() {
+      try {
+        return JSON.parse(localStorage.getItem('jumplab_test_history_v3') || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function persistTestHistory() {
+      try {
+        localStorage.setItem('jumplab_test_history_v3', JSON.stringify(testHistory.slice(0, 30)));
+      } catch (e) {
+        console.warn('Test history could not be saved:', e);
+      }
+    }
+
+    function getCurrentProtocol() {
+      return document.getElementById('jumpProtocolSelect')?.value || 'CMJ';
+    }
+
+    function getMainDifference(mA, mB) {
+      const candidates = [
+        { label: '跳高', a: mA.jumpHeightFT, b: mB.jumpHeightFT, unit: 'cm' },
+        { label: '騰空時間', a: mA.flightTimeMs, b: mB.flightTimeMs, unit: 'ms' },
+        { label: '落地緩衝', a: mA.landingBufferDepthCm, b: mB.landingBufferDepthCm, unit: 'cm' },
+        { label: '對稱性', a: mA.symmetryPct, b: mB.symmetryPct, unit: '%' }
+      ].filter(x => Number.isFinite(x.a) && Number.isFinite(x.b));
+      if (!candidates.length) return '尚無足夠資料';
+      const main = candidates.reduce((best, item) => {
+        const score = Math.abs(item.b - item.a) / Math.max(Math.abs(item.a), 1);
+        return score > best.score ? { ...item, score } : best;
+      }, { score: -1 });
+      const delta = main.b - main.a;
+      return `${main.label}差 ${delta >= 0 ? '+' : ''}${delta.toFixed(main.unit === 'ms' ? 0 : 1)} ${main.unit}`;
+    }
+
+    function recordComparisonTest(label) {
+      const mA = slots.A.metrics;
+      const mB = slots.B.metrics;
+      if (!mA || !mB || mA.jumpHeightFT === undefined || mB.jumpHeightFT === undefined) return;
+      testHistory.unshift({
+        id: Date.now(),
+        time: new Date().toLocaleString('zh-TW'),
+        type: label,
+        protocol: getCurrentProtocol(),
+        heightA: mA.jumpHeightFT,
+        heightB: mB.jumpHeightFT,
+        flightA: mA.flightTimeMs,
+        flightB: mB.flightTimeMs,
+        bufferA: mA.landingBufferDepthCm,
+        bufferB: mB.landingBufferDepthCm,
+        mainDifference: getMainDifference(mA, mB)
+      });
+      testHistory = testHistory.slice(0, 30);
+      persistTestHistory();
+      renderTestHistory();
+    }
+
+    function recordWebcamTest(result) {
+      testHistory.unshift({
+        id: Date.now(),
+        time: new Date().toLocaleString('zh-TW'),
+        type: '即時攝影機',
+        protocol: getCurrentProtocol(),
+        heightA: result.jumpHeightCm,
+        heightB: null,
+        flightA: result.flightTimeMs,
+        flightB: null,
+        bufferA: result.peakHeightCm,
+        bufferB: null,
+        mainDifference: `觸地 ${result.contactMs.toFixed(0)} ms／緩衝 ${result.bufferMs.toFixed(0)} ms`
+      });
+      testHistory = testHistory.slice(0, 30);
+      persistTestHistory();
+      renderTestHistory();
+    }
+
+    function renderTestHistory() {
+      const body = document.getElementById('testHistoryBody');
+      if (!body) return;
+      if (!testHistory.length) {
+        body.innerHTML = '<tr><td colspan="7" class="px-3 py-5 text-center text-slate-400">完成一次影片比較或即時跳躍後，這裡會保留簡易摘要</td></tr>';
+        return;
+      }
+      body.innerHTML = testHistory.map((r, index) => {
+        const height = r.heightB == null ? `${r.heightA.toFixed(1)} cm` : `${r.heightA.toFixed(1)} / ${r.heightB.toFixed(1)} cm`;
+        const flight = r.flightB == null ? `${r.flightA.toFixed(0)} ms` : `${r.flightA.toFixed(0)} / ${r.flightB.toFixed(0)} ms`;
+        const buffer = r.bufferB == null ? `${r.bufferA.toFixed(1)} cm` : `${r.bufferA.toFixed(1)} / ${r.bufferB.toFixed(1)} cm`;
+        return `<tr class="border-t border-slate-100 hover:bg-slate-50"><td class="px-3 py-2 text-slate-500 whitespace-nowrap">${r.time}</td><td class="px-3 py-2 font-bold">${r.type}<span class="block text-[10px] font-normal text-slate-400">${r.protocol}</span></td><td class="px-3 py-2 text-right font-mono">${height}</td><td class="px-3 py-2 text-right font-mono">${flight}</td><td class="px-3 py-2 text-right font-mono">${buffer}</td><td class="px-3 py-2 font-semibold text-violet-700">${r.mainDifference}</td><td class="px-3 py-2 text-right"><button onclick="removeTestHistory(${r.id})" class="text-slate-400 hover:text-rose-600" title="刪除此筆">×</button></td></tr>`;
+      }).join('');
+    }
+
+    function removeTestHistory(id) {
+      testHistory = testHistory.filter(r => r.id !== id);
+      persistTestHistory();
+      renderTestHistory();
+    }
+
+    function clearTestHistory() {
+      testHistory = [];
+      persistTestHistory();
+      renderTestHistory();
+      showToast('已清除測試歷史', 'info');
+    }
+
+    function buildStandaloneReport() {
+      const protocol = getCurrentProtocol();
+      const mA = slots.A.metrics || {};
+      const mB = slots.B.metrics || {};
+      const title = `JumpLab ${protocol} 跳躍分析報告`;
+      const rows = [
+        ['跳躍高度 FT', mA.jumpHeightFT, mB.jumpHeightFT, 'cm'],
+        ['質心最大上升高度', mA.jumpHeightCOM, mB.jumpHeightCOM, 'cm'],
+        ['騰空時間', mA.flightTimeMs, mB.flightTimeMs, 'ms'],
+        ['落地緩衝最低質心位移', mA.landingBufferDepthCm, mB.landingBufferDepthCm, 'cm'],
+        ['RSImod', mA.rsiMod, mB.rsiMod, 'm/s'],
+        ['雙側對稱性', mA.symmetryPct, mB.symmetryPct, '%']
+      ];
+      const tableRows = rows.map(([name, a, b, unit]) => `<tr><td>${name}</td><td>${Number.isFinite(a) ? a.toFixed(2) : '--'} ${unit}</td><td>${Number.isFinite(b) ? b.toFixed(2) : '--'} ${unit}</td></tr>`).join('');
+      const historyRows = testHistory.slice(0, 10).map(r => `<tr><td>${r.time}</td><td>${r.type} (${r.protocol})</td><td>${r.mainDifference}</td></tr>`).join('');
+      const content = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:Arial,'Noto Sans TC',sans-serif;max-width:900px;margin:32px auto;padding:0 20px;color:#172033}h1{color:#124d3a}table{width:100%;border-collapse:collapse;margin:16px 0 28px}th,td{border:1px solid #dbe3ea;padding:9px;text-align:left}th{background:#eef5f2}small{color:#64748b}</style></head><body><h1>${title}</h1><small>匯出時間：${new Date().toLocaleString('zh-TW')}</small><h2>本次指標</h2><table><thead><tr><th>指標</th><th>影片 A / 即時</th><th>影片 B</th></tr></thead><tbody>${tableRows}</tbody></table><h2>測試歷史摘要</h2><table><thead><tr><th>時間</th><th>測試</th><th>主要差異</th></tr></thead><tbody>${historyRows || '<tr><td colspan="3">尚無歷史資料</td></tr>'}</tbody></table><p><small>影像估算值僅供訓練回饋，正式測量請搭配測力板、光柵或其他校正設備。</small></p></body></html>`;
+      return { content, filename: `JumpLab_${protocol}_Report_${new Date().toISOString().slice(0, 10)}.html` };
+    }
+
+    function exposeLatestReportLink(content, filename) {
+      if (latestReportObjectUrl) URL.revokeObjectURL(latestReportObjectUrl);
+      latestReportObjectUrl = URL.createObjectURL(new Blob([content], { type: 'text/html;charset=utf-8' }));
+      const link = document.getElementById('latestReportLink');
+      link.href = latestReportObjectUrl;
+      link.download = filename;
+      document.getElementById('latestReportLinkWrap').classList.remove('hidden');
+    }
+
+    function exportReportHTML() {
+      const report = buildStandaloneReport();
+      exposeLatestReportLink(report.content, report.filename);
+      triggerDownload(report.content, report.filename, 'text/html;charset=utf-8;');
+      toggleExportMenu();
+      showToast('已產生完整 HTML 報告檔，可下載或附加到 LINE 分享', 'success');
+    }
+
+    async function shareReportFile() {
+      const report = buildStandaloneReport();
+      exposeLatestReportLink(report.content, report.filename);
+      const file = new File([report.content], report.filename, { type: 'text/html' });
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        try {
+          await navigator.share({ title: `JumpLab ${getCurrentProtocol()} 報告`, text: 'JumpLab 跳躍分析報告', files: [file] });
+          showToast('已開啟系統分享，可選擇 LINE 傳送', 'success');
+        } catch (e) {
+          if (e.name !== 'AbortError') showToast('分享未完成，仍可使用下方報告連結下載', 'warning');
+        }
+      } else {
+        triggerDownload(report.content, report.filename, 'text/html;charset=utf-8;');
+        showToast('此瀏覽器不支援直接分享，已下載報告，請在 LINE 附加檔案', 'info');
+      }
+      toggleExportMenu();
+    }
+
+    function toggleExportMenu() {
+      document.getElementById('exportDropdown').classList.toggle('hidden');
+    }
+
+    function exportReportCSV() {
+      const mA = slots.A.metrics;
+      const mB = slots.B.metrics;
+      if (!mA || !mB || mA.jumpHeightFT === undefined || mB.jumpHeightFT === undefined) {
+        showToast('請先完成全片骨架掃描或載入範例後再匯出報告。', 'warning');
+        return;
+      }
+      const csvRows = [
+        ['Metric', 'Video A (Baseline)', 'Video B (Comparison)', 'Difference (B - A)'],
+        ['Jump Height FT (cm)', mA.jumpHeightFT.toFixed(2), mB.jumpHeightFT.toFixed(2), (mB.jumpHeightFT - mA.jumpHeightFT).toFixed(2)],
+        ['Jump Height COM (cm)', mA.jumpHeightCOM.toFixed(2), mB.jumpHeightCOM.toFixed(2), (mB.jumpHeightCOM - mA.jumpHeightCOM).toFixed(2)],
+        ['Flight Time (ms)', mA.flightTimeMs.toFixed(1), mB.flightTimeMs.toFixed(1), (mB.flightTimeMs - mA.flightTimeMs).toFixed(1)],
+        ['Contraction Time (ms)', mA.contractionTimeMs.toFixed(1), mB.contractionTimeMs.toFixed(1), (mB.contractionTimeMs - mA.contractionTimeMs).toFixed(1)],
+        ['RSImod (m/s)', mA.rsiMod.toFixed(3), mB.rsiMod.toFixed(3), (mB.rsiMod - mA.rsiMod).toFixed(3)],
+        ['Eccentric Depth (cm)', mA.eccentricDepthCm.toFixed(2), mB.eccentricDepthCm.toFixed(2), (mB.eccentricDepthCm - mA.eccentricDepthCm).toFixed(2)],
+        ['Min Knee Angle (deg)', mA.minKneeAngle.toFixed(1), mB.minKneeAngle.toFixed(1), (mB.minKneeAngle - mA.minKneeAngle).toFixed(1)],
+        ['Min Hip Angle (deg)', mA.minHipAngle.toFixed(1), mB.minHipAngle.toFixed(1), (mB.minHipAngle - mA.minHipAngle).toFixed(1)],
+        ['Symmetry Index (%)', mA.symmetryPct.toFixed(1), mB.symmetryPct.toFixed(1), (mB.symmetryPct - mA.symmetryPct).toFixed(1)]
+      ];
+
+      const csvContent = '\uFEFF' + csvRows.map(e => e.join(',')).join('\n');
+      triggerDownload(csvContent, 'JumpLab_v3_Comparison_Report.csv', 'text/csv;charset=utf-8;');
+      toggleExportMenu();
+      showToast('已匯出 CSV 生物力學報告', 'success');
+    }
+
+    function exportReportJSON() {
+      const payload = {
+        app: 'JumpLab v3',
+        exportedAt: new Date().toISOString(),
+        protocol: document.getElementById('jumpProtocolSelect').value,
+        videoA: { label: document.getElementById('label-A').value, metrics: slots.A.metrics, events: slots.A.events },
+        videoB: { label: document.getElementById('label-B').value, metrics: slots.B.metrics, events: slots.B.events }
+      };
+      triggerDownload(JSON.stringify(payload, null, 2), 'JumpLab_v3_Kinematics.json', 'application/json');
+      toggleExportMenu();
+      showToast('已匯出 JSON 完整運動學數據', 'success');
+    }
+
+    function triggerDownload(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const colors = {
+        success: 'bg-[#124d3a] text-white border-emerald-400',
+        error: 'bg-rose-700 text-white border-rose-400',
+        warning: 'bg-amber-600 text-white border-amber-300',
+        info: 'bg-slate-800 text-white border-slate-600'
+      };
+      const el = document.createElement('div');
+      el.className = `px-4 py-2.5 rounded-xl shadow-lg border text-xs font-semibold transition-all duration-300 transform translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+      el.textContent = message;
+      container.appendChild(el);
+
+      requestAnimationFrame(() => {
+        el.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        el.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => el.remove(), 300);
+      }, 3200);
+    }
+  </script>
+</body>
+</html>
